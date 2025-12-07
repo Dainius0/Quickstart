@@ -130,7 +130,7 @@ public class REDMecanumTeleOp extends LinearOpMode {
 
             // Turret follow IMU heading
             double imuHeading = drive.getHeading();
-            double targetAngle = dynamicMode ? 50  - imuHeading : 65 - imuHeading;  //pamazinau 72 -> 70 -> 68 kai mazeja, tada sukasi desiniau (tolimas sovimas)
+            double targetAngle = dynamicMode ? 44.5  - imuHeading : 65 - imuHeading;  //pamazinau 72 -> 70 -> 68 kai mazeja, tada sukasi desiniau (tolimas sovimas)
             turret.moveToAngle(targetAngle, 0.8); // 45 -> 50
 
             // Telemetry

@@ -10,8 +10,8 @@ import com.qualcomm.robotcore.hardware.IMU;
 import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 
-@Autonomous(name = "BlueAuto")
-public class BLUEAuto extends LinearOpMode {
+@Autonomous(name = "RedAuto")
+public class REDAuto_LONG_Range extends LinearOpMode {
 
     // Shooter velocity targets (ticks per second)
     private static final double SHOOTER_VELOCITY_DYNAMIC = 1420;
@@ -57,11 +57,11 @@ public class BLUEAuto extends LinearOpMode {
         waitForStart();
         if (isStopRequested()) return;
 
-        // Example autonomous routine
-        // Shoot 3 preloaded discs in dynamic mode
+        // Example autonomous routine for RED ALLIANCE
+        // Shoot 6 preloaded discs in fixed mode
         shootSequence(MODE_FIXED, 6);
 
-        // Drive forward
+        // Drive forward (same direction as blue, field-centric handles orientation)
         driveForTime(-0.7, 0, 0, 600);
 
         // Return turret to starting position
@@ -120,6 +120,9 @@ public class BLUEAuto extends LinearOpMode {
                 RevHubOrientationOnRobot.UsbFacingDirection.UP));
         imu.initialize(parameters);
         imu.resetYaw();
+
+        telemetry.addLine("RED ALLIANCE Initialized");
+        telemetry.update();
     }
 
     /**
@@ -132,13 +135,14 @@ public class BLUEAuto extends LinearOpMode {
         double shooterVelocity = (mode == MODE_DYNAMIC) ? SHOOTER_VELOCITY_DYNAMIC : SHOOTER_VELOCITY_FIXED;
         double angleRaised = (mode == MODE_DYNAMIC) ? angleRaisedDynamic : angleRaisedFixed;
 
-        // Align turret based on mode
+        // Align turret based on mode (RED ALLIANCE)
         alignTurret(mode);
 
         // Spin up shooter and raise angle
         shooter.setVelocity(shooterVelocity);
         shooterAngle.setPosition(angleRaised);
 
+        telemetry.addData("Alliance", "RED");
         telemetry.addData("Status", "Spinning up shooter");
         telemetry.addData("Target Velocity", shooterVelocity);
         telemetry.addData("Mode", mode == MODE_DYNAMIC ? "DYNAMIC" : "FIXED");
@@ -148,6 +152,7 @@ public class BLUEAuto extends LinearOpMode {
         for (int i = 0; i < numShots; i++) {
             if (!opModeIsActive()) break;
 
+            telemetry.addData("Alliance", "RED");
             telemetry.addData("Status", String.format("Shooting disc %d/%d", i + 1, numShots));
             telemetry.update();
 
@@ -159,6 +164,7 @@ public class BLUEAuto extends LinearOpMode {
         shooterServo.setPosition(servoHome);
         shooterAngle.setPosition(angleHome);
 
+        telemetry.addData("Alliance", "RED");
         telemetry.addData("Status", "Shooting complete");
         telemetry.update();
     }
@@ -220,16 +226,19 @@ public class BLUEAuto extends LinearOpMode {
     }
 
     /**
-     * Aligns turret based on shooting mode
+     * Aligns turret based on shooting mode (RED ALLIANCE)
+     * Turret angles are MIRRORED from blue side
      */
     private void alignTurret(int mode) {
         double imuHeading = imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.DEGREES);
         double targetAngle;
 
         if (mode == MODE_DYNAMIC) {
-            targetAngle = -34 - imuHeading;
+            // RED SIDE: Mirror of Blue's -34° = +34°
+            targetAngle = 34 - imuHeading;
         } else {
-            targetAngle = -68 - imuHeading;
+            // RED SIDE: Mirror of Blue's -68° = +68°
+            targetAngle = 68 - imuHeading;
         }
 
         // Clamp within safety limits
@@ -239,8 +248,10 @@ public class BLUEAuto extends LinearOpMode {
 
         // Wait for turret to reach position
         while (opModeIsActive() && turretRotator.isBusy()) {
+            telemetry.addData("Alliance", "RED");
             telemetry.addData("Turret Position", turretRotator.getCurrentPosition());
             telemetry.addData("Turret Target", turretRotator.getTargetPosition());
+            telemetry.addData("Target Angle", String.format("%.1f°", targetAngle));
             telemetry.update();
             sleep(10);
         }
@@ -257,6 +268,7 @@ public class BLUEAuto extends LinearOpMode {
      * Returns turret to starting position (0 degrees)
      */
     private void returnTurretToHome() {
+        telemetry.addData("Alliance", "RED");
         telemetry.addData("Status", "Returning turret to home position");
         telemetry.update();
 
@@ -264,18 +276,21 @@ public class BLUEAuto extends LinearOpMode {
 
         // Wait for turret to reach home position
         while (opModeIsActive() && turretRotator.isBusy()) {
+            telemetry.addData("Alliance", "RED");
             telemetry.addData("Turret Position", turretRotator.getCurrentPosition());
             telemetry.addData("Turret Target", "0 (Home)");
             telemetry.update();
             sleep(10);
         }
 
+        telemetry.addData("Alliance", "RED");
         telemetry.addData("Status", "Turret at home position");
         telemetry.update();
     }
 
     /**
      * Drive robot using field-centric control for specified time
+     * Field-centric automatically handles orientation differences
      * @param y Forward/backward (-1 to 1)
      * @param x Strafe left/right (-1 to 1)
      * @param rx Rotation (-1 to 1)
@@ -327,6 +342,7 @@ public class BLUEAuto extends LinearOpMode {
         shooter.setVelocity(0);
         shooter.setPower(0);
 
+        telemetry.addData("Alliance", "RED");
         telemetry.addData("Status", "Shooter braked");
         telemetry.update();
     }

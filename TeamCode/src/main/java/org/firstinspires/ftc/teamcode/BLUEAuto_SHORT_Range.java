@@ -16,7 +16,7 @@ import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 import org.firstinspires.ftc.teamcode.subsystems.ShooterSystem;
 
 @Autonomous
-public class BLUEPedroAuto extends OpMode {
+public class BLUEAuto_SHORT_Range extends OpMode {
     private Follower follower;
     private Timer pathTimer, opModeTimer, shootingTimer;
 
@@ -27,8 +27,8 @@ public class BLUEPedroAuto extends OpMode {
     private DcMotor intakeMotor1, intakeMotor2, turretRotator;
     private IMU imu;
 
-    // Velocity stability requirements for shooting
-    private static final long VELOCITY_STABLE_TIME_REQUIRED = 150;  // ms
+    // NEW: Timed shooting constants (500ms between shots)
+    private static final long SHOT_INTERVAL = 500;  // ms between shots
     private static final long INTAKE_PULSE_DURATION = 300;  // ms per shot
 
     // Turret constants
@@ -41,8 +41,8 @@ public class BLUEPedroAuto extends OpMode {
     private int shotsRemaining = 0;
     private int totalShots = 4;
     private ShootingState shootingState = ShootingState.IDLE;
-    private boolean velocityWasInRange = false;
-    private long velocityInRangeStartTime = 0;
+    private long lastShotTime = 0;  // NEW: Track when last shot occurred
+    private boolean isFirstShotEver = true;  // NEW: Track if this is the very first shot
 
     // Intake tracking
     private boolean intakeActive = false;
@@ -58,20 +58,18 @@ public class BLUEPedroAuto extends OpMode {
         DRIVE_TO_POINT_4,
         DRIVE_TO_SHOOT_POS_3,
         SHOOT_THIRD_ROUND,
-        DRIVE_TO_POINT_5,      // NEW: Fourth collection sequence
-        DRIVE_TO_POINT_6,      // NEW
-        DRIVE_TO_SHOOT_POS_4,  // NEW
-        SHOOT_FOURTH_ROUND,    // NEW
-        DRIVE_TO_PARK,         // NEW: Park at (48, 96)
+        DRIVE_TO_POINT_5,
+        DRIVE_TO_POINT_6,
+        DRIVE_TO_SHOOT_POS_4,
+        SHOOT_FOURTH_ROUND,
+        DRIVE_TO_PARK,
         COMPLETE
     }
 
     public enum ShootingState {
         IDLE,
-        SPINNING_UP,
-        WAITING_FOR_VELOCITY,
-        SHOOTING,
-        SHOT_COMPLETE
+        WAITING_FOR_INTERVAL,  // Wait for 500ms between shots
+        SHOOTING
     }
 
     PathState pathState;
@@ -82,14 +80,14 @@ public class BLUEPedroAuto extends OpMode {
     private final Pose point2Pose = new Pose(20, 82, Math.toRadians(180));
     private final Pose point3Pose = new Pose(48, 58, Math.toRadians(180));
     private final Pose point4Pose = new Pose(20, 58, Math.toRadians(180));
-    private final Pose point5Pose = new Pose(48, 33, Math.toRadians(180));  // NEW
-    private final Pose point6Pose = new Pose(15, 33, Math.toRadians(180));  // NEW
-    private final Pose parkPose = new Pose(48, 96, Math.toRadians(180));    // NEW
+    private final Pose point5Pose = new Pose(48, 33, Math.toRadians(180));
+    private final Pose point6Pose = new Pose(15, 33, Math.toRadians(180));
+    private final Pose parkPose = new Pose(48, 60, Math.toRadians(180));
 
     private PathChain driveStartPosShootPos, driveToPoint1, driveToPoint2;
     private PathChain driveToShootPos2, driveToPoint3, driveToPoint4;
-    private PathChain driveToShootPos3, driveToPoint5, driveToPoint6;      // NEW
-    private PathChain driveToShootPos4, driveToPark;                        // NEW
+    private PathChain driveToShootPos3, driveToPoint5, driveToPoint6;
+    private PathChain driveToShootPos4, driveToPark;
 
     public void buildPaths() {
         // First shooting sequence paths
@@ -130,7 +128,6 @@ public class BLUEPedroAuto extends OpMode {
                 .setLinearHeadingInterpolation(point4Pose.getHeading(), shootPose.getHeading())
                 .build();
 
-        // NEW: Fourth collection sequence paths
         driveToPoint5 = follower.pathBuilder()
                 .addPath(new BezierLine(shootPose, point5Pose))
                 .setLinearHeadingInterpolation(shootPose.getHeading(), point5Pose.getHeading())
@@ -141,13 +138,11 @@ public class BLUEPedroAuto extends OpMode {
                 .setLinearHeadingInterpolation(point5Pose.getHeading(), point6Pose.getHeading())
                 .build();
 
-        // NEW: Fourth shooting sequence path
         driveToShootPos4 = follower.pathBuilder()
                 .addPath(new BezierLine(point6Pose, shootPose))
                 .setLinearHeadingInterpolation(point6Pose.getHeading(), shootPose.getHeading())
                 .build();
 
-        // NEW: Park path
         driveToPark = follower.pathBuilder()
                 .addPath(new BezierLine(shootPose, parkPose))
                 .setLinearHeadingInterpolation(shootPose.getHeading(), parkPose.getHeading())
@@ -165,7 +160,7 @@ public class BLUEPedroAuto extends OpMode {
                 if (!follower.isBusy()) {
                     // Start shooting sequence
                     if (shootingState == ShootingState.IDLE) {
-                        startDynamicShooting(totalShots);
+                        startTimedShooting(totalShots);
                     }
 
                     // Update shooting state machine
@@ -180,7 +175,6 @@ public class BLUEPedroAuto extends OpMode {
 
             case DRIVE_TO_POINT_1:
                 if (!follower.isBusy()) {
-                    // Start intake before beginning the path to point 1
                     startIntake();
                     follower.followPath(driveToPoint1, true);
                     setPathState(PathState.DRIVE_TO_POINT_2);
@@ -188,42 +182,30 @@ public class BLUEPedroAuto extends OpMode {
                 break;
 
             case DRIVE_TO_POINT_2:
-                // Intake should still be running from previous path
                 if (!follower.isBusy()) {
-                    // REDUCED SPEED for better ball collection
                     follower.setMaxPower(0.8);
                     follower.followPath(driveToPoint2, true);
                     setPathState(PathState.DRIVE_TO_SHOOT_POS_2);
                 }
-
                 telemetry.addData("Intake Status", intakeActive ? "ACTIVE - Collecting" : "STOPPED");
-                telemetry.addData("Drive Speed", "REDUCED (70%)");
                 break;
 
             case DRIVE_TO_SHOOT_POS_2:
-                // Intake continues running during this path
                 if (!follower.isBusy()) {
-                    // RESTORE FULL SPEED and stop intake when arriving at shoot position
                     follower.setMaxPower(1.0);
                     stopIntake();
                     follower.followPath(driveToShootPos2, true);
                     setPathState(PathState.SHOOT_SECOND_ROUND);
                 }
-
                 telemetry.addData("Intake Status", intakeActive ? "ACTIVE - Collecting" : "STOPPED");
                 break;
 
             case SHOOT_SECOND_ROUND:
                 if (!follower.isBusy()) {
-                    // Start shooting sequence
                     if (shootingState == ShootingState.IDLE) {
-                        startDynamicShooting(totalShots);
+                        startTimedShooting(totalShots);
                     }
-
-                    // Update shooting state machine
                     updateShootingStateMachine();
-
-                    // Move to next path when all shots are done
                     if (shootingState == ShootingState.IDLE && shotsRemaining == 0) {
                         setPathState(PathState.DRIVE_TO_POINT_3);
                     }
@@ -232,7 +214,6 @@ public class BLUEPedroAuto extends OpMode {
 
             case DRIVE_TO_POINT_3:
                 if (!follower.isBusy()) {
-                    // Start intake before beginning the path to point 3
                     startIntake();
                     follower.followPath(driveToPoint3, true);
                     setPathState(PathState.DRIVE_TO_POINT_4);
@@ -240,52 +221,38 @@ public class BLUEPedroAuto extends OpMode {
                 break;
 
             case DRIVE_TO_POINT_4:
-                // Intake should still be running from previous path
                 if (!follower.isBusy()) {
-                    // REDUCED SPEED for better ball collection
                     follower.setMaxPower(0.8);
                     follower.followPath(driveToPoint4, true);
                     setPathState(PathState.DRIVE_TO_SHOOT_POS_3);
                 }
-
                 telemetry.addData("Intake Status", intakeActive ? "ACTIVE - Collecting" : "STOPPED");
-                telemetry.addData("Drive Speed", "REDUCED (70%)");
                 break;
 
             case DRIVE_TO_SHOOT_POS_3:
-                // Intake continues running during this path
                 if (!follower.isBusy()) {
-                    // RESTORE FULL SPEED and stop intake when arriving at shoot position
                     follower.setMaxPower(1.0);
                     stopIntake();
                     follower.followPath(driveToShootPos3, true);
                     setPathState(PathState.SHOOT_THIRD_ROUND);
                 }
-
                 telemetry.addData("Intake Status", intakeActive ? "ACTIVE - Collecting" : "STOPPED");
                 break;
 
             case SHOOT_THIRD_ROUND:
                 if (!follower.isBusy()) {
-                    // Start shooting sequence
                     if (shootingState == ShootingState.IDLE) {
-                        startDynamicShooting(totalShots);
+                        startTimedShooting(totalShots);
                     }
-
-                    // Update shooting state machine
                     updateShootingStateMachine();
-
-                    // Move to next path when all shots are done
                     if (shootingState == ShootingState.IDLE && shotsRemaining == 0) {
                         setPathState(PathState.DRIVE_TO_POINT_5);
                     }
                 }
                 break;
 
-            // NEW: Fourth collection sequence
             case DRIVE_TO_POINT_5:
                 if (!follower.isBusy()) {
-                    // Start intake before beginning the path to point 5
                     startIntake();
                     follower.followPath(driveToPoint5, true);
                     setPathState(PathState.DRIVE_TO_POINT_6);
@@ -293,49 +260,38 @@ public class BLUEPedroAuto extends OpMode {
                 break;
 
             case DRIVE_TO_POINT_6:
-                // Intake should still be running from previous path
                 if (!follower.isBusy()) {
-                    // REDUCED SPEED for better ball collection
                     follower.setMaxPower(0.8);
                     follower.followPath(driveToPoint6, true);
                     setPathState(PathState.DRIVE_TO_SHOOT_POS_4);
                 }
-
                 telemetry.addData("Intake Status", intakeActive ? "ACTIVE - Collecting" : "STOPPED");
-                telemetry.addData("Drive Speed", "REDUCED (70%)");
                 break;
 
             case DRIVE_TO_SHOOT_POS_4:
-                // Intake continues running during this path
                 if (!follower.isBusy()) {
-                    // RESTORE FULL SPEED and stop intake when arriving at shoot position
                     follower.setMaxPower(1.0);
                     stopIntake();
                     follower.followPath(driveToShootPos4, true);
                     setPathState(PathState.SHOOT_FOURTH_ROUND);
                 }
-
                 telemetry.addData("Intake Status", intakeActive ? "ACTIVE - Collecting" : "STOPPED");
                 break;
 
             case SHOOT_FOURTH_ROUND:
                 if (!follower.isBusy()) {
-                    // Start shooting sequence
                     if (shootingState == ShootingState.IDLE) {
-                        startDynamicShooting(totalShots);
+                        startTimedShooting(totalShots);
                     }
-
-                    // Update shooting state machine
                     updateShootingStateMachine();
-
-                    // Move to park when all shots are done
                     if (shootingState == ShootingState.IDLE && shotsRemaining == 0) {
+                        // CHANGED: Return turret to home before parking
+                        returnTurretToHome();
                         setPathState(PathState.DRIVE_TO_PARK);
                     }
                 }
                 break;
 
-            // NEW: Drive to park position
             case DRIVE_TO_PARK:
                 if (!follower.isBusy()) {
                     follower.followPath(driveToPark, true);
@@ -345,11 +301,12 @@ public class BLUEPedroAuto extends OpMode {
 
             case COMPLETE:
                 if (!follower.isBusy()) {
-                    // Stop all mechanisms
                     shooterSystem.stop();
                     stopIntake();
+                    // CHANGED: Ensure turret is at home position
                     returnTurretToHome();
-                    telemetry.addLine("Autonomous Complete - Parked!");
+                    telemetry.addLine("Autonomous Complete - Parked at (48, 60)!");
+                    telemetry.addData("Turret Position", "Home (0 degrees)");
                 }
                 break;
 
@@ -364,9 +321,6 @@ public class BLUEPedroAuto extends OpMode {
         pathTimer.resetTimer();
     }
 
-    /**
-     * Starts the intake for collecting game elements
-     */
     private void startIntake() {
         intakeMotor1.setPower(-0.9);
         intakeMotor2.setPower(-0.9);
@@ -374,9 +328,6 @@ public class BLUEPedroAuto extends OpMode {
         telemetry.addData("Intake", "Started");
     }
 
-    /**
-     * Stops the intake motors
-     */
     private void stopIntake() {
         intakeMotor1.setPower(0);
         intakeMotor2.setPower(0);
@@ -385,76 +336,66 @@ public class BLUEPedroAuto extends OpMode {
     }
 
     /**
-     * Starts the dynamic shooting sequence
-     * Note: Shooter is already spinning from start() method
+     * NEW: Starts the timed shooting sequence
+     * Shooter spins continuously, intake pulses every 500ms
      */
-    private void startDynamicShooting(int numShots) {
+    private void startTimedShooting(int numShots) {
         shotsRemaining = numShots;
-        shootingState = ShootingState.SPINNING_UP;
-        shootingTimer.resetTimer();
+        shootingState = ShootingState.WAITING_FOR_INTERVAL;
+        lastShotTime = System.currentTimeMillis();
 
-        // Align turret for dynamic shooting
+        // Align turret for shooting
         alignTurretDynamic();
 
-        // Shooter is already spinning - just ensure servo is at home
-        shooterSystem.homeServo();
+        // Shooter is already spinning - move servo to shoot position
+        shooterSystem.shoot();
 
-        telemetry.addData("Status", "Starting dynamic shooting");
+        telemetry.addData("Status", "Starting timed shooting");
         telemetry.addData("Shots to fire", numShots);
     }
 
     /**
-     * State machine for shooting process
+     * NEW: Optimized state machine for timed shooting (500ms intervals)
+     * PIDF continues running, shooter keeps spinning, only intake timing changes
+     * Maximum efficiency - no stabilization delays
+     * FIRST SHOT ONLY: 700ms delay (500ms + 200ms extra)
      */
     private void updateShootingStateMachine() {
+        long currentTime = System.currentTimeMillis();
         double currentVelocity = shooterSystem.getVelocity();
 
         switch (shootingState) {
-            case SPINNING_UP:
-                // Wait a moment for shooter to start spinning
-                if (shootingTimer.getElapsedTimeSeconds() > 0.3) {
-                    shootingState = ShootingState.WAITING_FOR_VELOCITY;
-                    velocityWasInRange = false;
-                }
-                telemetry.addData("Shooting State", "Spinning Up");
+            case WAITING_FOR_INTERVAL:
+                // Wait for interval since last shot
+                // First shot ever gets 200ms extra delay (700ms total)
+                long timeSinceLastShot = currentTime - lastShotTime;
+                long requiredInterval = isFirstShotEver ? (SHOT_INTERVAL + 200) : SHOT_INTERVAL;
+
+                telemetry.addData("Shooting State", "Waiting for Interval");
+                telemetry.addData("Time Since Last Shot", timeSinceLastShot + "ms");
+                telemetry.addData("Required Interval", requiredInterval + "ms");
+                telemetry.addData("Next Shot In", (requiredInterval - timeSinceLastShot) + "ms");
                 telemetry.addData("Current Velocity", currentVelocity);
-                break;
-
-            case WAITING_FOR_VELOCITY:
-                boolean velocityReady = shooterSystem.isAtTargetVelocity(true); // true = dynamic mode
-
-                long currentTime = System.currentTimeMillis();
-
-                if (velocityReady) {
-                    if (!velocityWasInRange) {
-                        velocityInRangeStartTime = currentTime;
-                        velocityWasInRange = true;
-                        // Move servo to shoot position when velocity is correct
-                        shooterSystem.shoot();
-                    }
-
-                    long timeInRange = currentTime - velocityInRangeStartTime;
-
-                    telemetry.addData("Shooting State", "Velocity Stabilizing");
-                    telemetry.addData("Time in Range", timeInRange);
-
-                    // Velocity stable long enough, start shooting
-                    if (timeInRange >= VELOCITY_STABLE_TIME_REQUIRED) {
-                        shootingState = ShootingState.SHOOTING;
-                        shootingTimer.resetTimer();
-
-                        // Execute shot - pulse intake motors
-                        intakeMotor1.setPower(-1);
-                        intakeMotor2.setPower(-1);
-                    }
-                } else {
-                    // Velocity not ready yet - reset tracking but DON'T move servo
-                    velocityWasInRange = false;
-                    telemetry.addData("Shooting State", "Waiting for Velocity");
+                if (isFirstShotEver) {
+                    telemetry.addData("FIRST SHOT", "Extra 200ms delay active");
                 }
 
-                telemetry.addData("Current Velocity", currentVelocity);
-                telemetry.addData("Target Velocity", ShooterSystem.VELOCITY_DYNAMIC);
+                if (timeSinceLastShot >= requiredInterval) {
+                    // Time to shoot - pulse intake immediately
+                    shootingState = ShootingState.SHOOTING;
+                    shootingTimer.resetTimer();
+
+                    intakeMotor1.setPower(-1);
+                    intakeMotor2.setPower(-1);
+
+                    // Clear first shot flag after the first shot begins
+                    if (isFirstShotEver) {
+                        isFirstShotEver = false;
+                        telemetry.addData("Status", "FIRST SHOT FIRED - Normal timing resumes");
+                    }
+
+                    telemetry.addData("Action", "FIRING SHOT!");
+                }
                 break;
 
             case SHOOTING:
@@ -465,29 +406,19 @@ public class BLUEPedroAuto extends OpMode {
                     intakeMotor2.setPower(0.0);
 
                     shotsRemaining--;
-                    shootingState = ShootingState.SHOT_COMPLETE;
-                    shootingTimer.resetTimer();
-                }
-                telemetry.addData("Shooting State", "Firing!");
-                break;
 
-            case SHOT_COMPLETE:
-                // Wait a moment between shots
-                if (shootingTimer.getElapsedTimeSeconds() > 0.2) {
                     if (shotsRemaining > 0) {
-                        // Return servo to home before next shot
-                        shooterSystem.homeServo();
-                        // Start next shot (shooter still spinning)
-                        shootingState = ShootingState.WAITING_FOR_VELOCITY;
-                        velocityWasInRange = false;
+                        // Immediately continue to next shot - no pause
+                        shootingState = ShootingState.WAITING_FOR_INTERVAL;
+                        lastShotTime = currentTime;
                     } else {
-                        // All shots complete - return servo to home
-                        // Keep shooter spinning for next shooting sequence
+                        // All shots complete
                         shooterSystem.homeServo();
                         shootingState = ShootingState.IDLE;
                     }
                 }
-                telemetry.addData("Shooting State", "Shot Complete");
+                telemetry.addData("Shooting State", "Firing!");
+                telemetry.addData("Current Velocity", currentVelocity);
                 telemetry.addData("Shots Remaining", shotsRemaining);
                 break;
 
@@ -497,14 +428,10 @@ public class BLUEPedroAuto extends OpMode {
         }
     }
 
-    /**
-     * Aligns turret for dynamic shooting mode
-     */
     private void alignTurretDynamic() {
         double imuHeading = imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.DEGREES);
-        double targetAngle = -37 - imuHeading;
+        double targetAngle = -37.5 - imuHeading; //37 kinda good 10/12
 
-        // Clamp within safety limits
         targetAngle = Math.max(MIN_TURRET_ANGLE, Math.min(MAX_TURRET_ANGLE, targetAngle));
 
         moveTurretToAngle(targetAngle, 0.8);
@@ -519,21 +446,20 @@ public class BLUEPedroAuto extends OpMode {
         turretRotator.setPower(Math.abs(power));
     }
 
+    // CHANGED: Enhanced returnTurretToHome to ensure it reaches position 0
     private void returnTurretToHome() {
         moveTurretToAngle(0, 0.8);
+        telemetry.addData("Turret", "Returning to home (0 degrees)");
     }
 
     private void initializeHardware() {
-        // Initialize ShooterSystem subsystem
         shooterSystem = new ShooterSystem(hardwareMap);
 
-        // Initialize intake motors
         intakeMotor1 = hardwareMap.dcMotor.get("intakeMotor1");
         intakeMotor2 = hardwareMap.dcMotor.get("intakeMotor2");
         intakeMotor1.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         intakeMotor2.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
 
-        // Initialize turret
         turretRotator = hardwareMap.dcMotor.get("turretRotator");
         turretRotator.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         turretRotator.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
@@ -541,7 +467,6 @@ public class BLUEPedroAuto extends OpMode {
         turretRotator.setMode(DcMotor.RunMode.RUN_TO_POSITION);
         turretRotator.setPower(0.0);
 
-        // Initialize IMU
         imu = hardwareMap.get(IMU.class, "imu");
         IMU.Parameters parameters = new IMU.Parameters(new RevHubOrientationOnRobot(
                 RevHubOrientationOnRobot.LogoFacingDirection.LEFT,
@@ -571,9 +496,9 @@ public class BLUEPedroAuto extends OpMode {
         opModeTimer.resetTimer();
         setPathState(pathState);
 
-        // Start shooter spinning immediately and keep it running throughout autonomous
-        shooterSystem.spinUp(true); // true = dynamic mode
-        telemetry.addLine("Shooter spinning up for autonomous");
+        // Start shooter spinning and keep it running (PIDF still active)
+        shooterSystem.spinUp(true);
+        telemetry.addLine("Shooter spinning up for timed autonomous");
     }
 
     @Override
@@ -586,10 +511,10 @@ public class BLUEPedroAuto extends OpMode {
         telemetry.addData("Shots Remaining", shotsRemaining);
         telemetry.addData("Intake Active", intakeActive);
         telemetry.addData("Shooter Velocity", shooterSystem.getVelocity());
+        telemetry.addData("Turret Position", turretRotator.getCurrentPosition());
         telemetry.addData("x", follower.getPose().getX());
         telemetry.addData("y", follower.getPose().getY());
         telemetry.addData("heading", Math.toDegrees(follower.getPose().getHeading()));
-        telemetry.addData("Path Time", pathTimer.getElapsedTimeSeconds());
         telemetry.update();
     }
 }

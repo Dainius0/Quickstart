@@ -18,20 +18,24 @@ public class BLUEMecanumTeleOp extends LinearOpMode {
 
         boolean dynamicMode = true;
         boolean lastDynamicMode = true;
-        boolean xPressed = false, aPressed = false;
-        boolean turretTrackingEnabled = true;
+        boolean xPressed = false;
+        boolean aPressed = false;
         boolean bPressed = false;
+        boolean trianglePressed = false;
+        boolean turretTrackingEnabled = true;
 
         // Shooting state
         boolean isShooting = false;
         boolean isForceFeeding = false;
+        int ballsShot = 0;
+        ElapsedTime shootTimer = new ElapsedTime();
 
         waitForStart();
 
         // START SHOOTER IMMEDIATELY - set velocity and angle once
         shooter.setVelocity(dynamicMode);
         shooter.setAngle(dynamicMode);
-        shooter.homeServo(); // Make sure servo is home
+        shooter.homeServo();
 
         while (opModeIsActive()) {
 
@@ -65,12 +69,26 @@ public class BLUEMecanumTeleOp extends LinearOpMode {
             }
             else if (!gamepad1.b) bPressed = false;
 
+            // Toggle turret home position with Triangle button
+            if (gamepad1.triangle && !trianglePressed) {
+                if (turretTrackingEnabled) {
+                    // If currently tracking, go to home (0 position)
+                    turretTrackingEnabled = false;
+                    turret.moveToAngle(0, 0.8);
+                } else {
+                    // If at home, resume tracking
+                    turretTrackingEnabled = true;
+                }
+                trianglePressed = true;
+            }
+            else if (!gamepad1.triangle) trianglePressed = false;
+
             // Drive
             drive.drive(
                     gamepad1.left_stick_x * 1.1,
                     -gamepad1.left_stick_y,
                     -gamepad1.right_stick_x,
-                    gamepad1.left_trigger  // Add this line for slow mode
+                    gamepad1.left_trigger
             );
 
             // LEFT BUMPER - Force feed (no RPM check, reduced power)
@@ -85,19 +103,32 @@ public class BLUEMecanumTeleOp extends LinearOpMode {
                 intake.intakeInReduced();
 
             }
-            // DPAD UP - Normal shoot (waits for target velocity)
+            // DPAD UP - Smart shoot (first ball immediate, others wait for velocity)
             else if (gamepad1.dpad_up) {
-                // Only extend servo once when starting to shoot
+                // Starting to shoot - initialize
                 if (!isShooting) {
                     shooter.shoot();
                     isShooting = true;
+                    ballsShot = 0;
+                    shootTimer.reset();
                 }
 
-                // Run intakes only if at target velocity
-                if (shooter.isAtTargetVelocity(dynamicMode)) {
+                // First ball: shoot immediately without waiting for velocity
+                if (ballsShot == 0) {
                     intake.intakeIn();
-                } else {
-                    intake.stop();
+                    // After 0.5 seconds, consider first ball shot
+                    if (shootTimer.seconds() > 0.5) {
+                        ballsShot = 1;
+                        shootTimer.reset();
+                    }
+                }
+                // All subsequent balls: wait for target velocity
+                else {
+                    if (shooter.isAtTargetVelocity(dynamicMode)) {
+                        intake.intakeIn();
+                    } else {
+                        intake.stop();
+                    }
                 }
             }
             // Neither bumper nor dpad up pressed
@@ -107,6 +138,7 @@ public class BLUEMecanumTeleOp extends LinearOpMode {
                     shooter.homeServo();
                     isShooting = false;
                     isForceFeeding = false;
+                    ballsShot = 0;
                 }
 
                 // Normal intake controls
@@ -119,35 +151,48 @@ public class BLUEMecanumTeleOp extends LinearOpMode {
                 }
             }
 
-            // Turret follow IMU heading
-            double imuHeading = drive.getHeading();
-            double targetAngle = dynamicMode ? -51 - imuHeading : -72 - imuHeading;
-            turret.moveToAngle(targetAngle, 0.8);
+            // Turret follow IMU heading only when tracking is enabled
+            if (turretTrackingEnabled) {
+                double imuHeading = drive.getHeading();
+                double targetAngle = dynamicMode ? -44.5 - imuHeading : -72 - imuHeading;
+                turret.moveToAngle(targetAngle, 0.8);
+            }
 
             // Telemetry
             telemetry.addData("=== DRIVE ===", "");
-            telemetry.addData("IMU Heading", "%.1f°", imuHeading);
+            telemetry.addData("IMU Heading", "%.1f°", drive.getHeading());
             telemetry.addData("", "");
             telemetry.addData("=== TURRET ===", "");
-            telemetry.addData("Tracking Mode", turretTrackingEnabled ? "IMU TRACKING" : "HOME POSITION");
-            telemetry.addData("Target Angle", "%.1f°", targetAngle);
-            telemetry.addData("Press B to Toggle", "");
+            telemetry.addData("Tracking Mode", turretTrackingEnabled ? "IMU TRACKING" : "HOME POSITION (0°)");
+            if (turretTrackingEnabled) {
+                double imuHeading = drive.getHeading();
+                double targetAngle = dynamicMode ? -44.5 - imuHeading : -72 - imuHeading;
+                telemetry.addData("Target Angle", "%.1f°", targetAngle);
+            } else {
+                telemetry.addData("Target Angle", "0° (Home)");
+            }
+            telemetry.addData("Press B to Toggle Tracking", "");
+            telemetry.addData("Press Triangle for Home/Resume", "");
             telemetry.addData("", "");
             telemetry.addData("=== SHOOTER ===", "");
             telemetry.addData("Mode", dynamicMode ? "DYNAMIC" : "FIXED");
             telemetry.addData("Target Velocity", dynamicMode ? ShooterSystem.VELOCITY_DYNAMIC : ShooterSystem.VELOCITY_FIXED);
             telemetry.addData("Current Velocity", "%.0f", shooter.getVelocity());
-            telemetry.addData("Shooting (DPAD UP)", isShooting ? "YES - Waiting for RPM" : "NO");
+            telemetry.addData("Shooting (DPAD UP)", isShooting ? "YES" : "NO");
+            telemetry.addData("First Ball", ballsShot >= 1 ? "SHOT" : (isShooting ? "SHOOTING NOW" : "READY"));
+            telemetry.addData("Additional Balls", ballsShot == 0 ? "Waiting..." : (shooter.isAtTargetVelocity(dynamicMode) ? "FEEDING" : "Waiting for RPM"));
             telemetry.addData("Force Feeding (L-BUMPER)", isForceFeeding ? "YES - Reduced power" : "NO");
             telemetry.addData("At Target RPM", shooter.isAtTargetVelocity(dynamicMode) ? "YES" : "NO");
             telemetry.addData("", "");
             telemetry.addData("=== CONTROLS ===", "");
             telemetry.addData("Right Bumper", "Normal Intake");
             telemetry.addData("DPAD Down", "Outtake");
-            telemetry.addData("DPAD Up", "Shoot (waits for RPM)");
+            telemetry.addData("DPAD Up", "Smart Shoot (1st instant, rest wait)");
             telemetry.addData("Left Bumper", "Force Feed (no wait)");
             telemetry.addData("A", "Dynamic Mode");
             telemetry.addData("X", "Fixed Mode");
+            telemetry.addData("B", "Toggle Tracking On/Off");
+            telemetry.addData("Triangle", "Home Position / Resume Tracking");
             telemetry.addData("Options", "Reset IMU Heading");
             telemetry.update();
         }
