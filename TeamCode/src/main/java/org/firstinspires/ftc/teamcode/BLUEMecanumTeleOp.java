@@ -2,7 +2,6 @@ package org.firstinspires.ftc.teamcode;
 
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
-import com.qualcomm.robotcore.util.ElapsedTime;
 import org.firstinspires.ftc.teamcode.subsystems.*;
 
 @TeleOp(name = "BLUETeleop")
@@ -24,15 +23,9 @@ public class BLUEMecanumTeleOp extends LinearOpMode {
         boolean trianglePressed = false;
         boolean turretTrackingEnabled = true;
 
-        // Shooting state
-        boolean isShooting = false;
-        boolean isForceFeeding = false;
-        int ballsShot = 0;
-        ElapsedTime shootTimer = new ElapsedTime();
-
         waitForStart();
 
-        // START SHOOTER IMMEDIATELY - set velocity and angle once
+        // START SHOOTER IMMEDIATELY - motors regulate RPM continuously
         shooter.setVelocity(dynamicMode);
         shooter.setAngle(dynamicMode);
         shooter.homeServo();
@@ -91,55 +84,19 @@ public class BLUEMecanumTeleOp extends LinearOpMode {
                     gamepad1.left_trigger
             );
 
-            // LEFT BUMPER - Force feed (no RPM check, reduced power)
-            if (gamepad1.left_bumper) {
-                // Only extend servo once when starting to force feed
-                if (!isForceFeeding) {
-                    shooter.shoot();
-                    isForceFeeding = true;
-                }
-
-                // Always run intakes at reduced power
+            // SHOOTING: DPAD UP - Extend servo and run intake
+            if (gamepad1.dpad_up) {
+                shooter.shoot();
+                intake.intakeIn();
+            }
+            // LEFT BUMPER - Force feed with reduced power
+            else if (gamepad1.left_bumper) {
+                shooter.shoot();
                 intake.intakeInReduced();
-
             }
-            // DPAD UP - Smart shoot (first ball immediate, others wait for velocity)
-            else if (gamepad1.dpad_up) {
-                // Starting to shoot - initialize
-                if (!isShooting) {
-                    shooter.shoot();
-                    isShooting = true;
-                    ballsShot = 0;
-                    shootTimer.reset();
-                }
-
-                // First ball: shoot immediately without waiting for velocity
-                if (ballsShot == 0) {
-                    intake.intakeIn();
-                    // After 0.5 seconds, consider first ball shot
-                    if (shootTimer.seconds() > 0.5) {
-                        ballsShot = 1;
-                        shootTimer.reset();
-                    }
-                }
-                // All subsequent balls: wait for target velocity
-                else {
-                    if (shooter.isAtTargetVelocity(dynamicMode)) {
-                        intake.intakeIn();
-                    } else {
-                        intake.stop();
-                    }
-                }
-            }
-            // Neither bumper nor dpad up pressed
+            // Not shooting
             else {
-                // Retract servo if we were shooting or force feeding
-                if (isShooting || isForceFeeding) {
-                    shooter.homeServo();
-                    isShooting = false;
-                    isForceFeeding = false;
-                    ballsShot = 0;
-                }
+                shooter.homeServo();
 
                 // Normal intake controls
                 if (gamepad1.right_bumper) {
@@ -178,17 +135,14 @@ public class BLUEMecanumTeleOp extends LinearOpMode {
             telemetry.addData("Mode", dynamicMode ? "DYNAMIC" : "FIXED");
             telemetry.addData("Target Velocity", dynamicMode ? ShooterSystem.VELOCITY_DYNAMIC : ShooterSystem.VELOCITY_FIXED);
             telemetry.addData("Current Velocity", "%.0f", shooter.getVelocity());
-            telemetry.addData("Shooting (DPAD UP)", isShooting ? "YES" : "NO");
-            telemetry.addData("First Ball", ballsShot >= 1 ? "SHOT" : (isShooting ? "SHOOTING NOW" : "READY"));
-            telemetry.addData("Additional Balls", ballsShot == 0 ? "Waiting..." : (shooter.isAtTargetVelocity(dynamicMode) ? "FEEDING" : "Waiting for RPM"));
-            telemetry.addData("Force Feeding (L-BUMPER)", isForceFeeding ? "YES - Reduced power" : "NO");
             telemetry.addData("At Target RPM", shooter.isAtTargetVelocity(dynamicMode) ? "YES" : "NO");
+            telemetry.addData("Servo Position", gamepad1.dpad_up || gamepad1.left_bumper ? "SHOOTING" : "HOME");
             telemetry.addData("", "");
             telemetry.addData("=== CONTROLS ===", "");
             telemetry.addData("Right Bumper", "Normal Intake");
             telemetry.addData("DPAD Down", "Outtake");
-            telemetry.addData("DPAD Up", "Smart Shoot (1st instant, rest wait)");
-            telemetry.addData("Left Bumper", "Force Feed (no wait)");
+            telemetry.addData("DPAD Up", "Shoot (servo + intake)");
+            telemetry.addData("Left Bumper", "Force Feed (reduced power)");
             telemetry.addData("A", "Dynamic Mode");
             telemetry.addData("X", "Fixed Mode");
             telemetry.addData("B", "Toggle Tracking On/Off");

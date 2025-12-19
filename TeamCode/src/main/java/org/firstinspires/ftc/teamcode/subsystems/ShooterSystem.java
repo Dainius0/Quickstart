@@ -6,7 +6,7 @@ import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.hardware.PIDFCoefficients;
 
 public class ShooterSystem {
-    private final DcMotorEx shooter;
+    private final DcMotorEx shooter1, shooter2;
     private final Servo shooterServo, shooterAngle;
 
     public static final double VELOCITY_DYNAMIC = 1500;
@@ -20,31 +20,39 @@ public class ShooterSystem {
     private static final double ANGLE_FIXED = 0.65;
 
     public ShooterSystem(HardwareMap hwMap) {
-        shooter = hwMap.get(DcMotorEx.class, "shooter");
+        shooter1 = hwMap.get(DcMotorEx.class, "shooter1");
+        shooter2 = hwMap.get(DcMotorEx.class, "shooter2");
         shooterServo = hwMap.servo.get("shooterServo");
         shooterAngle = hwMap.servo.get("shooterAngle");
 
-        shooter.setMode(DcMotorEx.RunMode.STOP_AND_RESET_ENCODER);
-        shooter.setMode(DcMotorEx.RunMode.RUN_USING_ENCODER);
-        shooter.setZeroPowerBehavior(DcMotorEx.ZeroPowerBehavior.FLOAT);
+        // Initialize both motors
+        shooter1.setMode(DcMotorEx.RunMode.STOP_AND_RESET_ENCODER);
+        shooter1.setMode(DcMotorEx.RunMode.RUN_USING_ENCODER);
+        shooter1.setZeroPowerBehavior(DcMotorEx.ZeroPowerBehavior.FLOAT);
 
-        // Improved PIDF for faster spin-up
+        shooter2.setMode(DcMotorEx.RunMode.STOP_AND_RESET_ENCODER);
+        shooter2.setMode(DcMotorEx.RunMode.RUN_USING_ENCODER);
+        shooter2.setZeroPowerBehavior(DcMotorEx.ZeroPowerBehavior.FLOAT);
+
+        // Improved PIDF for faster spin-up (apply to both motors)
         PIDFCoefficients pidf = new PIDFCoefficients(
                 25,      // P - increased for faster response
                 0.045,   // I - helps reach target faster
                 1,       // D - reduces overshoot
                 12.5     // F - feedforward
         );
-        shooter.setPIDFCoefficients(DcMotorEx.RunMode.RUN_USING_ENCODER, pidf);
+        shooter1.setPIDFCoefficients(DcMotorEx.RunMode.RUN_USING_ENCODER, pidf);
+        shooter2.setPIDFCoefficients(DcMotorEx.RunMode.RUN_USING_ENCODER, pidf);
 
         shooterServo.setPosition(SERVO_HOME);
         shooterAngle.setPosition(ANGLE_HOME);
     }
 
-    // Separate methods - don't touch servo in spinUp
     public void setVelocity(boolean dynamicMode) {
         double velocity = dynamicMode ? VELOCITY_DYNAMIC : VELOCITY_FIXED;
-        shooter.setVelocity(velocity);
+        // Motors spin in same direction
+        shooter1.setVelocity(-velocity);
+        shooter2.setVelocity(-velocity);
     }
 
     public void setAngle(boolean dynamicMode) {
@@ -58,19 +66,24 @@ public class ShooterSystem {
     }
 
     public void stop() {
-        shooter.setVelocity(0);
+        shooter1.setVelocity(0);
+        shooter2.setVelocity(0);
         shooterServo.setPosition(SERVO_HOME);
         shooterAngle.setPosition(ANGLE_HOME);
     }
 
     public double getVelocity() {
-        return Math.abs(shooter.getVelocity());
+        // Return average velocity of both motors
+        return (Math.abs(shooter1.getVelocity()) + Math.abs(shooter2.getVelocity())) / 2.0;
     }
 
     public boolean isAtTargetVelocity(boolean dynamicMode) {
         double target = dynamicMode ? VELOCITY_DYNAMIC : VELOCITY_FIXED;
-        double v = getVelocity();
-        return Math.abs(v - target) < VELOCITY_TOLERANCE;
+        double v1 = Math.abs(shooter1.getVelocity());
+        double v2 = Math.abs(shooter2.getVelocity());
+        // Both motors must be at target velocity
+        return Math.abs(v1 - target) < VELOCITY_TOLERANCE &&
+                Math.abs(v2 - target) < VELOCITY_TOLERANCE;
     }
 
     public void shoot() {
