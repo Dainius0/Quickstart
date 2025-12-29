@@ -12,16 +12,16 @@ public class IntakeSystem {
     }
 
     public void intakeIn() {
-        intakeMotor.setPower(1);
+        intakeMotor.setPower(-1);
     }
 
     // Reduced power for force feeding
     public void intakeInReduced() {
-        intakeMotor.setPower(1);
+        intakeMotor.setPower(-1);
     }
 
     public void intakeOut() {
-        intakeMotor.setPower(-1);
+        intakeMotor.setPower(1);
     }
 
     public void stop() {

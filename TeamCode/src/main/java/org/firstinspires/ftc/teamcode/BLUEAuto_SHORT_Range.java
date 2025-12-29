@@ -23,13 +23,12 @@ public class BLUEAuto_SHORT_Range extends OpMode {
     // Subsystems
     private ShooterSystem shooterSystem;
 
-    // Hardware
-    private DcMotor intakeMotor1, intakeMotor2, turretRotator;
+    // Hardware - Single intake motor
+    private DcMotor intakeMotor, turretRotator;
     private IMU imu;
 
-    // NEW: Timed shooting constants (500ms between shots)
-    private static final long SHOT_INTERVAL = 500;  // ms between shots
-    private static final long INTAKE_PULSE_DURATION = 300;  // ms per shot
+    // Continuous shooting constants
+    private static final long CONTINUOUS_SHOOT_DURATION = 1500;  // 1.5 seconds of continuous shooting
 
     // Turret constants
     private static final int TICKS_PER_ROTATION = 1872;
@@ -38,11 +37,7 @@ public class BLUEAuto_SHORT_Range extends OpMode {
     private static final double MAX_TURRET_ANGLE = 90.0;
 
     // Shooting state variables
-    private int shotsRemaining = 0;
-    private int totalShots = 4;
     private ShootingState shootingState = ShootingState.IDLE;
-    private long lastShotTime = 0;  // NEW: Track when last shot occurred
-    private boolean isFirstShotEver = true;  // NEW: Track if this is the very first shot
 
     // Intake tracking
     private boolean intakeActive = false;
@@ -68,13 +63,13 @@ public class BLUEAuto_SHORT_Range extends OpMode {
 
     public enum ShootingState {
         IDLE,
-        WAITING_FOR_INTERVAL,  // Wait for 500ms between shots
         SHOOTING
     }
 
     PathState pathState;
 
-    private final Pose startPose = new Pose(22.5, 120.5, Math.toRadians(180));
+    // UPDATED: New start and end positions
+    private final Pose startPose = new Pose(34, 131, Math.toRadians(180));
     private final Pose shootPose = new Pose(48, 96, Math.toRadians(180));
     private final Pose point1Pose = new Pose(48, 82, Math.toRadians(180));
     private final Pose point2Pose = new Pose(20, 82, Math.toRadians(180));
@@ -90,7 +85,6 @@ public class BLUEAuto_SHORT_Range extends OpMode {
     private PathChain driveToShootPos4, driveToPark;
 
     public void buildPaths() {
-        // First shooting sequence paths
         driveStartPosShootPos = follower.pathBuilder()
                 .addPath(new BezierLine(startPose, shootPose))
                 .setLinearHeadingInterpolation(startPose.getHeading(), shootPose.getHeading())
@@ -106,7 +100,6 @@ public class BLUEAuto_SHORT_Range extends OpMode {
                 .setLinearHeadingInterpolation(point1Pose.getHeading(), point2Pose.getHeading())
                 .build();
 
-        // Second shooting sequence paths
         driveToShootPos2 = follower.pathBuilder()
                 .addPath(new BezierLine(point2Pose, shootPose))
                 .setLinearHeadingInterpolation(point2Pose.getHeading(), shootPose.getHeading())
@@ -122,7 +115,6 @@ public class BLUEAuto_SHORT_Range extends OpMode {
                 .setLinearHeadingInterpolation(point3Pose.getHeading(), point4Pose.getHeading())
                 .build();
 
-        // Third shooting sequence path
         driveToShootPos3 = follower.pathBuilder()
                 .addPath(new BezierLine(point4Pose, shootPose))
                 .setLinearHeadingInterpolation(point4Pose.getHeading(), shootPose.getHeading())
@@ -158,16 +150,11 @@ public class BLUEAuto_SHORT_Range extends OpMode {
 
             case SHOOT_PRELOAD:
                 if (!follower.isBusy()) {
-                    // Start shooting sequence
                     if (shootingState == ShootingState.IDLE) {
-                        startTimedShooting(totalShots);
+                        startContinuousShooting();
                     }
-
-                    // Update shooting state machine
                     updateShootingStateMachine();
-
-                    // Move to next path when all shots are done
-                    if (shootingState == ShootingState.IDLE && shotsRemaining == 0) {
+                    if (shootingState == ShootingState.IDLE) {
                         setPathState(PathState.DRIVE_TO_POINT_1);
                     }
                 }
@@ -203,10 +190,10 @@ public class BLUEAuto_SHORT_Range extends OpMode {
             case SHOOT_SECOND_ROUND:
                 if (!follower.isBusy()) {
                     if (shootingState == ShootingState.IDLE) {
-                        startTimedShooting(totalShots);
+                        startContinuousShooting();
                     }
                     updateShootingStateMachine();
-                    if (shootingState == ShootingState.IDLE && shotsRemaining == 0) {
+                    if (shootingState == ShootingState.IDLE) {
                         setPathState(PathState.DRIVE_TO_POINT_3);
                     }
                 }
@@ -242,10 +229,10 @@ public class BLUEAuto_SHORT_Range extends OpMode {
             case SHOOT_THIRD_ROUND:
                 if (!follower.isBusy()) {
                     if (shootingState == ShootingState.IDLE) {
-                        startTimedShooting(totalShots);
+                        startContinuousShooting();
                     }
                     updateShootingStateMachine();
-                    if (shootingState == ShootingState.IDLE && shotsRemaining == 0) {
+                    if (shootingState == ShootingState.IDLE) {
                         setPathState(PathState.DRIVE_TO_POINT_5);
                     }
                 }
@@ -281,11 +268,10 @@ public class BLUEAuto_SHORT_Range extends OpMode {
             case SHOOT_FOURTH_ROUND:
                 if (!follower.isBusy()) {
                     if (shootingState == ShootingState.IDLE) {
-                        startTimedShooting(totalShots);
+                        startContinuousShooting();
                     }
                     updateShootingStateMachine();
-                    if (shootingState == ShootingState.IDLE && shotsRemaining == 0) {
-                        // CHANGED: Return turret to home before parking
+                    if (shootingState == ShootingState.IDLE) {
                         returnTurretToHome();
                         setPathState(PathState.DRIVE_TO_PARK);
                     }
@@ -303,7 +289,6 @@ public class BLUEAuto_SHORT_Range extends OpMode {
                 if (!follower.isBusy()) {
                     shooterSystem.stop();
                     stopIntake();
-                    // CHANGED: Ensure turret is at home position
                     returnTurretToHome();
                     telemetry.addLine("Autonomous Complete - Parked at (48, 60)!");
                     telemetry.addData("Turret Position", "Home (0 degrees)");
@@ -322,27 +307,24 @@ public class BLUEAuto_SHORT_Range extends OpMode {
     }
 
     private void startIntake() {
-        intakeMotor1.setPower(-0.9);
-        intakeMotor2.setPower(-0.9);
+        intakeMotor.setPower(1);
         intakeActive = true;
         telemetry.addData("Intake", "Started");
     }
 
     private void stopIntake() {
-        intakeMotor1.setPower(0);
-        intakeMotor2.setPower(0);
+        intakeMotor.setPower(0);
         intakeActive = false;
         telemetry.addData("Intake", "Stopped");
     }
 
     /**
-     * NEW: Starts the timed shooting sequence
-     * Shooter spins continuously, intake pulses every 500ms
+     * Starts continuous shooting for 1.5 seconds
+     * Shooter spins, servo extends, intake runs continuously
      */
-    private void startTimedShooting(int numShots) {
-        shotsRemaining = numShots;
-        shootingState = ShootingState.WAITING_FOR_INTERVAL;
-        lastShotTime = System.currentTimeMillis();
+    private void startContinuousShooting() {
+        shootingState = ShootingState.SHOOTING;
+        shootingTimer.resetTimer();
 
         // Align turret for shooting
         alignTurretDynamic();
@@ -350,76 +332,35 @@ public class BLUEAuto_SHORT_Range extends OpMode {
         // Shooter is already spinning - move servo to shoot position
         shooterSystem.shoot();
 
-        telemetry.addData("Status", "Starting timed shooting");
-        telemetry.addData("Shots to fire", numShots);
+        // Start intake continuously
+        intakeMotor.setPower(1);
+
+        telemetry.addData("Status", "Starting continuous shooting for 1.5s");
     }
 
     /**
-     * NEW: Optimized state machine for timed shooting (500ms intervals)
-     * PIDF continues running, shooter keeps spinning, only intake timing changes
-     * Maximum efficiency - no stabilization delays
-     * FIRST SHOT ONLY: 700ms delay (500ms + 200ms extra)
+     * Simplified state machine for continuous shooting
+     * Runs shooter + intake for 1.5 seconds, then stops
      */
     private void updateShootingStateMachine() {
-        long currentTime = System.currentTimeMillis();
         double currentVelocity = shooterSystem.getVelocity();
 
         switch (shootingState) {
-            case WAITING_FOR_INTERVAL:
-                // Wait for interval since last shot
-                // First shot ever gets 200ms extra delay (700ms total)
-                long timeSinceLastShot = currentTime - lastShotTime;
-                long requiredInterval = isFirstShotEver ? (SHOT_INTERVAL + 200) : SHOT_INTERVAL;
-
-                telemetry.addData("Shooting State", "Waiting for Interval");
-                telemetry.addData("Time Since Last Shot", timeSinceLastShot + "ms");
-                telemetry.addData("Required Interval", requiredInterval + "ms");
-                telemetry.addData("Next Shot In", (requiredInterval - timeSinceLastShot) + "ms");
-                telemetry.addData("Current Velocity", currentVelocity);
-                if (isFirstShotEver) {
-                    telemetry.addData("FIRST SHOT", "Extra 200ms delay active");
-                }
-
-                if (timeSinceLastShot >= requiredInterval) {
-                    // Time to shoot - pulse intake immediately
-                    shootingState = ShootingState.SHOOTING;
-                    shootingTimer.resetTimer();
-
-                    intakeMotor1.setPower(-1);
-                    intakeMotor2.setPower(-1);
-
-                    // Clear first shot flag after the first shot begins
-                    if (isFirstShotEver) {
-                        isFirstShotEver = false;
-                        telemetry.addData("Status", "FIRST SHOT FIRED - Normal timing resumes");
-                    }
-
-                    telemetry.addData("Action", "FIRING SHOT!");
-                }
-                break;
-
             case SHOOTING:
-                // Wait for intake pulse duration
-                if (shootingTimer.getElapsedTimeSeconds() * 1000 >= INTAKE_PULSE_DURATION) {
-                    // Stop intake
-                    intakeMotor1.setPower(0.0);
-                    intakeMotor2.setPower(0.0);
+                long elapsedTime = (long)(shootingTimer.getElapsedTimeSeconds() * 1000);
 
-                    shotsRemaining--;
-
-                    if (shotsRemaining > 0) {
-                        // Immediately continue to next shot - no pause
-                        shootingState = ShootingState.WAITING_FOR_INTERVAL;
-                        lastShotTime = currentTime;
-                    } else {
-                        // All shots complete
-                        shooterSystem.homeServo();
-                        shootingState = ShootingState.IDLE;
-                    }
-                }
-                telemetry.addData("Shooting State", "Firing!");
+                telemetry.addData("Shooting State", "Continuous Shooting");
+                telemetry.addData("Elapsed Time", elapsedTime + "ms");
+                telemetry.addData("Remaining Time", (CONTINUOUS_SHOOT_DURATION - elapsedTime) + "ms");
                 telemetry.addData("Current Velocity", currentVelocity);
-                telemetry.addData("Shots Remaining", shotsRemaining);
+
+                if (elapsedTime >= CONTINUOUS_SHOOT_DURATION) {
+                    // Shooting duration complete - stop everything
+                    intakeMotor.setPower(0);
+                    shooterSystem.homeServo();
+                    shootingState = ShootingState.IDLE;
+                    telemetry.addData("Action", "Shooting Complete!");
+                }
                 break;
 
             case IDLE:
@@ -430,12 +371,9 @@ public class BLUEAuto_SHORT_Range extends OpMode {
 
     private void alignTurretDynamic() {
         double imuHeading = imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.DEGREES);
-        double targetAngle = -37.5 - imuHeading; //37 kinda good 10/12
-
+        double targetAngle = -37 + imuHeading;  // Changed from minus to plus
         targetAngle = Math.max(MIN_TURRET_ANGLE, Math.min(MAX_TURRET_ANGLE, targetAngle));
-
         moveTurretToAngle(targetAngle, 0.8);
-
         telemetry.addData("Turret Target Angle", targetAngle);
     }
 
@@ -446,7 +384,6 @@ public class BLUEAuto_SHORT_Range extends OpMode {
         turretRotator.setPower(Math.abs(power));
     }
 
-    // CHANGED: Enhanced returnTurretToHome to ensure it reaches position 0
     private void returnTurretToHome() {
         moveTurretToAngle(0, 0.8);
         telemetry.addData("Turret", "Returning to home (0 degrees)");
@@ -455,10 +392,8 @@ public class BLUEAuto_SHORT_Range extends OpMode {
     private void initializeHardware() {
         shooterSystem = new ShooterSystem(hardwareMap);
 
-        intakeMotor1 = hardwareMap.dcMotor.get("intakeMotor1");
-        intakeMotor2 = hardwareMap.dcMotor.get("intakeMotor2");
-        intakeMotor1.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        intakeMotor2.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        intakeMotor = hardwareMap.dcMotor.get("intakeMotor");
+        intakeMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
 
         turretRotator = hardwareMap.dcMotor.get("turretRotator");
         turretRotator.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
@@ -489,6 +424,8 @@ public class BLUEAuto_SHORT_Range extends OpMode {
         follower.setPose(startPose);
 
         telemetry.addLine("Initialization Complete");
+        telemetry.addLine("Starting Position: (32, 136) @ 270°");
+        telemetry.addLine("Parking Position: (48, 60) @ 270°");
         telemetry.addLine("Ready to start!");
     }
 
@@ -496,9 +433,9 @@ public class BLUEAuto_SHORT_Range extends OpMode {
         opModeTimer.resetTimer();
         setPathState(pathState);
 
-        // Start shooter spinning and keep it running (PIDF still active)
+        // Start shooter spinning and keep it running
         shooterSystem.spinUp(true);
-        telemetry.addLine("Shooter spinning up for timed autonomous");
+        telemetry.addLine("Shooter spinning up for continuous autonomous");
     }
 
     @Override
@@ -508,7 +445,6 @@ public class BLUEAuto_SHORT_Range extends OpMode {
 
         telemetry.addData("Path State", pathState.toString());
         telemetry.addData("Shooting State", shootingState.toString());
-        telemetry.addData("Shots Remaining", shotsRemaining);
         telemetry.addData("Intake Active", intakeActive);
         telemetry.addData("Shooter Velocity", shooterSystem.getVelocity());
         telemetry.addData("Turret Position", turretRotator.getCurrentPosition());
