@@ -9,8 +9,8 @@ public class ShooterSystem {
     private final DcMotorEx shooter1, shooter2;
     private final Servo shooterServo, shooterServo2, shooterAngle;
 
-    public static final double VELOCITY_DYNAMIC = 1450;
-    public static final double VELOCITY_FIXED = 2100;
+    public static final double VELOCITY_DYNAMIC = 1480;
+    public static final double VELOCITY_FIXED = 1900;
     private static final double VELOCITY_TOLERANCE = 30;
 
     private static final double SERVO_HOME = 0.85;
@@ -77,18 +77,61 @@ public class ShooterSystem {
         shooterAngle.setPosition(ANGLE_HOME);
     }
 
+    /**
+     * Get average velocity of both shooter motors
+     */
     public double getVelocity() {
-        // Return average velocity of both motors
         return (Math.abs(shooter1.getVelocity()) + Math.abs(shooter2.getVelocity())) / 2.0;
     }
 
+    /**
+     * Get velocity of shooter motor 1
+     */
+    public double getVelocity1() {
+        return Math.abs(shooter1.getVelocity());
+    }
+
+    /**
+     * Get velocity of shooter motor 2
+     */
+    public double getVelocity2() {
+        return Math.abs(shooter2.getVelocity());
+    }
+
+    /**
+     * Check if both motors are at target velocity
+     */
     public boolean isAtTargetVelocity(boolean dynamicMode) {
         double target = dynamicMode ? VELOCITY_DYNAMIC : VELOCITY_FIXED;
         double v1 = Math.abs(shooter1.getVelocity());
         double v2 = Math.abs(shooter2.getVelocity());
-        // Both motors must be at target velocity
         return Math.abs(v1 - target) < VELOCITY_TOLERANCE &&
                 Math.abs(v2 - target) < VELOCITY_TOLERANCE;
+    }
+
+    /**
+     * Check if motor 1 is at target velocity
+     */
+    public boolean isMotor1AtTarget(boolean dynamicMode) {
+        double target = dynamicMode ? VELOCITY_DYNAMIC : VELOCITY_FIXED;
+        double v1 = Math.abs(shooter1.getVelocity());
+        return Math.abs(v1 - target) < VELOCITY_TOLERANCE;
+    }
+
+    /**
+     * Check if motor 2 is at target velocity
+     */
+    public boolean isMotor2AtTarget(boolean dynamicMode) {
+        double target = dynamicMode ? VELOCITY_DYNAMIC : VELOCITY_FIXED;
+        double v2 = Math.abs(shooter2.getVelocity());
+        return Math.abs(v2 - target) < VELOCITY_TOLERANCE;
+    }
+
+    /**
+     * Get target velocity based on mode
+     */
+    public double getTargetVelocity(boolean dynamicMode) {
+        return dynamicMode ? VELOCITY_DYNAMIC : VELOCITY_FIXED;
     }
 
     public void shoot() {
@@ -99,5 +142,26 @@ public class ShooterSystem {
     public void homeServo() {
         shooterServo.setPosition(SERVO_HOME);
         shooterServo2.setPosition(SERVO2_HOME);
+    }
+
+    /**
+     * Get current angle servo position
+     */
+    public double getAnglePosition() {
+        return shooterAngle.getPosition();
+    }
+
+    /**
+     * Get current shooter servo 1 position
+     */
+    public double getServo1Position() {
+        return shooterServo.getPosition();
+    }
+
+    /**
+     * Get current shooter servo 2 position
+     */
+    public double getServo2Position() {
+        return shooterServo2.getPosition();
     }
 }

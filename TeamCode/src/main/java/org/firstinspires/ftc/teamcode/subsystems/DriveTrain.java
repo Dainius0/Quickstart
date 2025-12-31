@@ -54,7 +54,7 @@ public class DriveTrain {
         rotX = rotX * 1.1;
 
         // Apply slow mode if trigger is pressed - 80% speed when fully pressed
-        double speedMultiplier = 1.0 - (slowModeTrigger * 0.2);  // Reduces by 20%, leaving 80%
+        double speedMultiplier = 1.0 - (slowModeTrigger * 0.3);  // Reduces by 20%, leaving 80%
         rotX *= speedMultiplier;
         rotY *= speedMultiplier;
         rx *= speedMultiplier;

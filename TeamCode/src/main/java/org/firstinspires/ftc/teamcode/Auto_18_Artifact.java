@@ -2,6 +2,7 @@ package org.firstinspires.ftc.teamcode;
 
 import com.pedropathing.follower.Follower;
 import com.pedropathing.geometry.BezierLine;
+import com.pedropathing.geometry.BezierCurve;
 import com.pedropathing.geometry.Pose;
 import com.pedropathing.paths.PathChain;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
@@ -28,8 +29,9 @@ public class Auto_18_Artifact extends OpMode {
     private IMU imu;
 
     // Continuous shooting constants
-    private static final long CONTINUOUS_SHOOT_DURATION = 1300;
-    private static final long INTAKE_WAIT_DURATION = 1500;
+    private static final long CONTINUOUS_SHOOT_DURATION = 1000;
+    private static final long INTAKE_WAIT_DURATION = 200;
+    private static final long INTERMEDIATE_PAUSE_DURATION = 0; // Pause at intermediate point (ms)
 
     // Turret constants
     private static final int TICKS_PER_ROTATION = 1872;
@@ -45,6 +47,7 @@ public class Auto_18_Artifact extends OpMode {
     private ShootingState shootingState = ShootingState.IDLE;
     private boolean intakeActive = false;
     private boolean waitingForIntake = false;
+    private boolean waitingAtIntermediate = false;
 
     public enum PathState {
         DRIVE_TO_SHOOT_POS,
@@ -56,8 +59,11 @@ public class Auto_18_Artifact extends OpMode {
         DRIVE_TO_SHOOT_POS_2,
         SHOOT_SECOND_ROUND,
         DRIVE_TO_MIDPOINT_3,
+        DRIVE_TO_INTERMEDIATE_3,
         DRIVE_TO_INTAKE_3,
         WAIT_AND_INTAKE_3,
+        DRIVE_TO_EXTRA_INTAKE_3,      // NEW: Extra intake point
+        WAIT_AND_INTAKE_EXTRA_3,      // NEW: Wait at extra intake
         RETURN_TO_MIDPOINT_3,
         DRIVE_TO_SHOOT_POS_3,
         SHOOT_THIRD_ROUND,
@@ -85,18 +91,20 @@ public class Auto_18_Artifact extends OpMode {
     private final Pose shootPose = new Pose(48, 96, Math.toRadians(180));
     private final Pose midPoint = new Pose(48, 56, Math.toRadians(180));
     private final Pose intakeEndPoint = new Pose(14, 56, Math.toRadians(180));
-    private final Pose midPoint3 = new Pose(48, 58.5, Math.toRadians(180));
-    private final Pose intakePoint3 = new Pose(15.5, 58.5, Math.toRadians(150));
+    private final Pose midPoint3 = new Pose(48, 60, Math.toRadians(180));
+    private final Pose intermediatePoint3 = new Pose(15.1, 60, Math.toRadians(180));
+    private final Pose intakePoint3 = new Pose(10, 42, Math.toRadians(135));
+    private final Pose extraIntakePoint3 = new Pose(10, 52, Math.toRadians(150)); // NEW: Extra intake point between intake3 and midpoint3
     private final Pose midPoint4 = new Pose(48, 80, Math.toRadians(180));
     private final Pose intakePoint4 = new Pose(17, 80, Math.toRadians(180));
     private final Pose midPoint5 = new Pose(48, 33, Math.toRadians(180));
-    private final Pose intakePoint5 = new Pose(17, 33, Math.toRadians(180));
+    private final Pose intakePoint5 = new Pose(17, 30, Math.toRadians(180));
     private final Pose finalPose = new Pose(48, 60, Math.toRadians(180));
 
     // Path chains
     private PathChain driveToShootPos, driveToMidpoint, driveToIntakeStart;
     private PathChain intakeForward, returnToMidpoint, driveToShootPos2;
-    private PathChain driveToMidpoint3, driveToIntake3, returnToMidpoint3, driveToShootPos3;
+    private PathChain driveToMidpoint3, driveToIntermediate3, driveToIntake3, driveToExtraIntake3, returnToMidpoint3, driveToShootPos3;
     private PathChain driveToMidpoint4, intakeForward4, driveToShootPos4;
     private PathChain driveToMidpoint5, intakeForward5, driveToShootPos5;
     private PathChain driveToFinalPosition;
@@ -138,20 +146,35 @@ public class Auto_18_Artifact extends OpMode {
                 .setLinearHeadingInterpolation(midPoint.getHeading(), shootPose.getHeading())
                 .build();
 
-        // THIRD CYCLE
+        // THIRD CYCLE - WITH INTERMEDIATE POINT AND CURVED PATH
         driveToMidpoint3 = follower.pathBuilder()
                 .addPath(new BezierLine(shootPose, midPoint3))
                 .setLinearHeadingInterpolation(shootPose.getHeading(), midPoint3.getHeading())
                 .build();
 
-        driveToIntake3 = follower.pathBuilder()
-                .addPath(new BezierLine(midPoint3, intakePoint3))
-                .setLinearHeadingInterpolation(midPoint3.getHeading(), intakePoint3.getHeading())
+        // Drive to intermediate point (14.5, 60.5, 180°) - straight line
+        driveToIntermediate3 = follower.pathBuilder()
+                .addPath(new BezierLine(midPoint3, intermediatePoint3))
+                .setLinearHeadingInterpolation(midPoint3.getHeading(), intermediatePoint3.getHeading())
                 .build();
 
+        // CURVED PATH: Drive from intermediate point to intake point with a smooth curve
+        Pose controlPoint = new Pose(15, 56, Math.toRadians(180));
+        driveToIntake3 = follower.pathBuilder()
+                .addPath(new BezierCurve(intermediatePoint3, controlPoint, intakePoint3))
+                .setLinearHeadingInterpolation(intermediatePoint3.getHeading(), intakePoint3.getHeading())
+                .build();
+
+        // NEW: Drive from intakePoint3 to extraIntakePoint3 with intake running
+        driveToExtraIntake3 = follower.pathBuilder()
+                .addPath(new BezierLine(intakePoint3, extraIntakePoint3))
+                .setLinearHeadingInterpolation(intakePoint3.getHeading(), extraIntakePoint3.getHeading())
+                .build();
+
+        // Return from extra intake point to midpoint3
         returnToMidpoint3 = follower.pathBuilder()
-                .addPath(new BezierLine(intakePoint3, midPoint3))
-                .setLinearHeadingInterpolation(intakePoint3.getHeading(), midPoint3.getHeading())
+                .addPath(new BezierLine(extraIntakePoint3, midPoint3))
+                .setLinearHeadingInterpolation(extraIntakePoint3.getHeading(), midPoint3.getHeading())
                 .build();
 
         driveToShootPos3 = follower.pathBuilder()
@@ -272,15 +295,40 @@ public class Auto_18_Artifact extends OpMode {
             case DRIVE_TO_MIDPOINT_3:
                 if (!follower.isBusy()) {
                     follower.followPath(driveToMidpoint3, true);
+                    setPathState(PathState.DRIVE_TO_INTERMEDIATE_3);
+                }
+                telemetry.addData("Status", "Driving to midpoint 3 (48, 60.5)");
+                break;
+
+            case DRIVE_TO_INTERMEDIATE_3:
+                if (!follower.isBusy()) {
+                    // Start intake and drive to intermediate point
+                    startIntake();
+                    follower.setMaxPower(INTAKE_DRIVE_POWER);
+                    follower.followPath(driveToIntermediate3, true);
                     setPathState(PathState.DRIVE_TO_INTAKE_3);
                 }
-                telemetry.addData("Status", "Driving to midpoint 3 (48, 60)");
+                telemetry.addData("Status", "Starting intake, driving to intermediate (14.5, 60.5)");
                 break;
 
             case DRIVE_TO_INTAKE_3:
                 if (!follower.isBusy()) {
-                    follower.followPath(driveToIntake3, true);
-                    setPathState(PathState.WAIT_AND_INTAKE_3);
+                    // Short pause at intermediate point before continuing
+                    if (!waitingAtIntermediate) {
+                        waitingAtIntermediate = true;
+                        intakeWaitTimer.resetTimer();
+                        telemetry.addLine("Pausing at intermediate point");
+                    }
+
+                    long elapsedTime = (long)(intakeWaitTimer.getElapsedTimeSeconds() * 1000);
+                    telemetry.addData("Pause Time Remaining", (INTERMEDIATE_PAUSE_DURATION - elapsedTime) + "ms");
+
+                    if (elapsedTime >= INTERMEDIATE_PAUSE_DURATION) {
+                        waitingAtIntermediate = false;
+                        // Continue with curved path to intake point
+                        follower.followPath(driveToIntake3, true);
+                        setPathState(PathState.WAIT_AND_INTAKE_3);
+                    }
                 }
                 break;
 
@@ -289,19 +337,49 @@ public class Auto_18_Artifact extends OpMode {
                     if (!waitingForIntake) {
                         waitingForIntake = true;
                         intakeWaitTimer.resetTimer();
-                        startIntake();
+                        // Intake is already running from previous state
                     }
 
                     long elapsedTime = (long)(intakeWaitTimer.getElapsedTimeSeconds() * 1000);
                     telemetry.addData("Wait Time Remaining", (INTAKE_WAIT_DURATION - elapsedTime) + "ms");
 
                     if (elapsedTime >= INTAKE_WAIT_DURATION) {
+                        waitingForIntake = false;
+                        // Keep intake running and move to extra intake point
+                        setPathState(PathState.DRIVE_TO_EXTRA_INTAKE_3);
+                    }
+                }
+                break;
+
+            case DRIVE_TO_EXTRA_INTAKE_3:
+                if (!follower.isBusy()) {
+                    // Intake is still running, drive to extra intake point
+                    follower.followPath(driveToExtraIntake3, true);
+                    setPathState(PathState.WAIT_AND_INTAKE_EXTRA_3);
+                }
+                telemetry.addData("Status", "Driving to extra intake point (20, 52)");
+                break;
+
+            case WAIT_AND_INTAKE_EXTRA_3:
+                if (!follower.isBusy()) {
+                    if (!waitingForIntake) {
+                        waitingForIntake = true;
+                        intakeWaitTimer.resetTimer();
+                        // Intake is still running
+                    }
+
+                    long elapsedTime = (long)(intakeWaitTimer.getElapsedTimeSeconds() * 1000);
+                    telemetry.addData("Extra Wait Time Remaining", (INTAKE_WAIT_DURATION - elapsedTime) + "ms");
+
+                    if (elapsedTime >= INTAKE_WAIT_DURATION) {
                         stopIntake();
                         waitingForIntake = false;
+                        follower.setMaxPower(NORMAL_DRIVE_POWER);
                         follower.followPath(returnToMidpoint3, true);
                         setPathState(PathState.RETURN_TO_MIDPOINT_3);
                     }
                 }
+                telemetry.addData("Status", "Waiting and intaking at extra point");
                 break;
 
             case RETURN_TO_MIDPOINT_3:
@@ -334,7 +412,7 @@ public class Auto_18_Artifact extends OpMode {
                     follower.followPath(driveToMidpoint4, true);
                     setPathState(PathState.INTAKE_FORWARD_4);
                 }
-                telemetry.addData("Status", "Driving to midpoint 4 (48, 82)");
+                telemetry.addData("Status", "Driving to midpoint 4 (48, 80)");
                 break;
 
             case INTAKE_FORWARD_4:
@@ -344,7 +422,7 @@ public class Auto_18_Artifact extends OpMode {
                     follower.followPath(intakeForward4, true);
                     setPathState(PathState.DRIVE_TO_SHOOT_POS_4);
                 }
-                telemetry.addData("Status", "Intaking forward to (16, 82)");
+                telemetry.addData("Status", "Intaking forward to (17, 80)");
                 break;
 
             case DRIVE_TO_SHOOT_POS_4:
@@ -373,7 +451,7 @@ public class Auto_18_Artifact extends OpMode {
                     follower.followPath(driveToMidpoint5, true);
                     setPathState(PathState.INTAKE_FORWARD_5);
                 }
-                telemetry.addData("Status", "Driving to midpoint 5 (48, 36)");
+                telemetry.addData("Status", "Driving to midpoint 5 (48, 33)");
                 break;
 
             case INTAKE_FORWARD_5:
@@ -383,7 +461,7 @@ public class Auto_18_Artifact extends OpMode {
                     follower.followPath(intakeForward5, true);
                     setPathState(PathState.DRIVE_TO_SHOOT_POS_5);
                 }
-                telemetry.addData("Status", "Intaking forward to (16, 36)");
+                telemetry.addData("Status", "Intaking forward to (17, 30)");
                 break;
 
             case DRIVE_TO_SHOOT_POS_5:
@@ -439,7 +517,7 @@ public class Auto_18_Artifact extends OpMode {
     }
 
     private void startIntake() {
-        intakeMotor.setPower(1);
+        intakeMotor.setPower(-1);
         intakeActive = true;
     }
 
@@ -452,7 +530,7 @@ public class Auto_18_Artifact extends OpMode {
         shootingState = ShootingState.SHOOTING;
         shootingTimer.resetTimer();
         shooterSystem.shoot();
-        intakeMotor.setPower(1);
+        intakeMotor.setPower(-0.7);
     }
 
     private void updateShootingStateMachine() {
@@ -476,7 +554,7 @@ public class Auto_18_Artifact extends OpMode {
 
     private void alignTurretDynamic() {
         double imuHeading = imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.DEGREES);
-        double targetAngle = -37 + imuHeading;
+        double targetAngle = -38 + imuHeading;
         targetAngle = Math.max(MIN_TURRET_ANGLE, Math.min(MAX_TURRET_ANGLE, targetAngle));
         moveTurretToAngle(targetAngle, 0.8);
     }
