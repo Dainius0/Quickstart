@@ -184,6 +184,8 @@ public class BLUEAuto_SHORT_Range extends OpMode {
                     follower.followPath(driveToShootPos2, true);
                     setPathState(PathState.SHOOT_SECOND_ROUND);
                 }
+                telemetry.addData("danius", "nubas");
+
                 telemetry.addData("Intake Status", intakeActive ? "ACTIVE - Collecting" : "STOPPED");
                 break;
 

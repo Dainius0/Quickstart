@@ -8,14 +8,11 @@ public class TurretSystem {
     private static final int TICKS_PER_ROTATION = 1879;
     private static final double TICKS_PER_DEGREE = (double) TICKS_PER_ROTATION / 360.0;
 
-    private static final double MIN_TURRET_ANGLE = -180.0;
-    private static final double MAX_TURRET_ANGLE = 180.0;
+    private static final double MIN_TURRET_ANGLE = -210.0;
+    private static final double MAX_TURRET_ANGLE = 210.0;
 
-    // Store the precise target angle as a double to avoid drift
-    private double preciseTargetAngle = 0.0;
-
-    // Track accumulated rounding error
-    private double accumulatedError = 0.0;
+    // Store the commanded angle for reference
+    private double targetAngle = 0.0;
 
     public TurretSystem(HardwareMap hwMap) {
         turret = hwMap.dcMotor.get("turretRotator");
@@ -29,15 +26,12 @@ public class TurretSystem {
         // Clamp the angle to valid range
         angleDegrees = Math.max(MIN_TURRET_ANGLE, Math.min(MAX_TURRET_ANGLE, angleDegrees));
 
-        // Update our precise target
-        preciseTargetAngle = angleDegrees;
+        // Store the target angle
+        targetAngle = angleDegrees;
 
-        // Convert to ticks with accumulated error compensation
-        double exactTicks = preciseTargetAngle * TICKS_PER_DEGREE + accumulatedError;
-        int targetTicks = (int) Math.round(exactTicks);
-
-        // Update accumulated error (difference between what we wanted and what we're commanding)
-        accumulatedError = exactTicks - targetTicks;
+        // Convert to ticks - always calculate from home position (0)
+        // This prevents accumulated drift
+        int targetTicks = (int) Math.round(angleDegrees * TICKS_PER_DEGREE);
 
         // Send command to motor
         turret.setTargetPosition(targetTicks);
@@ -45,22 +39,21 @@ public class TurretSystem {
     }
 
     /**
-     * Reset the turret to home position (0 degrees) and clear accumulated error
+     * Reset the turret to home position (0 degrees)
      * Call this when you manually reset or home the turret
      */
     public void resetToHome() {
         turret.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         turret.setTargetPosition(0);
         turret.setMode(DcMotor.RunMode.RUN_TO_POSITION);
-        preciseTargetAngle = 0.0;
-        accumulatedError = 0.0;
+        targetAngle = 0.0;
     }
 
     /**
-     * Get the current target angle (the precise value, not the rounded tick value)
+     * Get the current target angle
      */
     public double getTargetAngle() {
-        return preciseTargetAngle;
+        return targetAngle;
     }
 
     /**
@@ -74,6 +67,13 @@ public class TurretSystem {
      * Check if turret is close to target position
      */
     public boolean isAtTarget(double toleranceDegrees) {
-        return Math.abs(getCurrentAngle() - preciseTargetAngle) < toleranceDegrees;
+        return Math.abs(getCurrentAngle() - targetAngle) < toleranceDegrees;
+    }
+
+    /**
+     * Get the motor for advanced control if needed
+     */
+    public DcMotor getMotor() {
+        return turret;
     }
 }

@@ -2,18 +2,38 @@ package org.firstinspires.ftc.teamcode;
 
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
+import com.qualcomm.hardware.lynx.LynxModule;
 import org.firstinspires.ftc.teamcode.subsystems.*;
+import java.util.List;
 
 @TeleOp(name = "BLUETeleop")
 public class BLUEMecanumTeleOp extends LinearOpMode {
 
     @Override
     public void runOpMode() throws InterruptedException {
-        // Pass 'false' to prevent resetting IMU yaw - preserves heading from autonomous
+        // Enable bulk caching for all hubs - CRITICAL for performance
+        List<LynxModule> allHubs = hardwareMap.getAll(LynxModule.class);
+        for (LynxModule hub : allHubs) {
+            hub.setBulkCachingMode(LynxModule.BulkCachingMode.AUTO);  // AUTO mode for better performance
+        }
+
+        // Initialize all subsystems
         DriveTrain drive = new DriveTrain(hardwareMap, false);
         ShooterSystem shooter = new ShooterSystem(hardwareMap);
         IntakeSystem intake = new IntakeSystem(hardwareMap);
         TurretSystem turret = new TurretSystem(hardwareMap);
+        DistanceSensorSystem distanceSensors = new DistanceSensorSystem();
+
+        // Initialize distance sensors
+        boolean sensorsAvailable = false;
+        try {
+            distanceSensors.init(hardwareMap);
+            sensorsAvailable = true;
+            telemetry.addLine("Distance sensors initialized");
+        } catch (Exception e) {
+            telemetry.addLine("Distance sensors not found");
+        }
+        telemetry.update();
 
         boolean dynamicMode = true;
         boolean xPressed = false;
@@ -21,23 +41,51 @@ public class BLUEMecanumTeleOp extends LinearOpMode {
         boolean optionsPressed = false;
         boolean turretTrackingEnabled = true;
 
+        // Performance optimization counters
+        int loopCounter = 0;
+        final int TELEMETRY_UPDATE_INTERVAL = 10;  // Update telemetry every 10 loops
+        final int DISTANCE_CHECK_INTERVAL = 5;     // Check distance sensors every 5 loops
+        final int TURRET_UPDATE_INTERVAL = 2;      // Update turret every 2 loops
+
+        // Turret optimization
+        double lastTurretTarget = 0;
+        final double TURRET_DEADBAND = 3.0;  // Increased deadband to reduce jitter
+
+        // Cache frequently used values
+        double cachedHeading = 0;
+        int headingUpdateCounter = 0;
+        final int HEADING_UPDATE_INTERVAL = 3;  // Update heading every 3 loops
+
         waitForStart();
 
-        // START SHOOTER IMMEDIATELY - motors regulate RPM continuously
+        // START SHOOTER IMMEDIATELY
         shooter.setVelocity(dynamicMode);
         shooter.setAngle(dynamicMode);
         shooter.homeServo();
 
         while (opModeIsActive()) {
+            loopCounter++;
+
+            // Distance sensor check - only every N loops AND only if available
+            if (sensorsAvailable && loopCounter % DISTANCE_CHECK_INTERVAL == 0) {
+                try {
+                    distanceSensors.checkThreeBallsAndVibrate(gamepad1);
+                } catch (Exception e) {
+                    // Silent fail
+                }
+            }
+
             // Reset IMU heading with Options button
             if (gamepad1.options && !optionsPressed) {
                 drive.resetHeading();
+                cachedHeading = 0;  // Reset cached heading
                 telemetry.addLine(">>> IMU HEADING RESET! <<<");
                 telemetry.update();
-                sleep(300); // Brief pause to show message
+                sleep(300);
                 optionsPressed = true;
+            } else if (!gamepad1.options) {
+                optionsPressed = false;
             }
-            else if (!gamepad1.options) optionsPressed = false;
 
             // Mode switching - X toggles dynamic/fixed mode
             if (gamepad1.x && !xPressed) {
@@ -45,25 +93,26 @@ public class BLUEMecanumTeleOp extends LinearOpMode {
                 shooter.setVelocity(dynamicMode);
                 shooter.setAngle(dynamicMode);
                 xPressed = true;
+            } else if (!gamepad1.x) {
+                xPressed = false;
             }
-            else if (!gamepad1.x) xPressed = false;
 
-            // Toggle between IMU tracking and 0 degree turret angle with Triangle button
+            // Toggle turret tracking with Triangle button
             if (gamepad1.triangle && !trianglePressed) {
                 turretTrackingEnabled = !turretTrackingEnabled;
                 if (!turretTrackingEnabled) {
                     turret.moveToAngle(0, 0.8);
-                    turret.resetToHome(); // Reset turret's accumulated error when homing
+                    lastTurretTarget = 0;
                 }
                 trianglePressed = true;
+            } else if (!gamepad1.triangle) {
+                trianglePressed = false;
             }
-            else if (!gamepad1.triangle) trianglePressed = false;
 
-            // INVERTED: Boost mode - 0.0 when not pressed (60% speed), 2.0 when pressed (100% speed)
-            // Default is slower, pressing button gives full speed boost
+            // Boost mode
             double boostModeValue = gamepad1.left_bumper ? 0.0 : 2.0;
 
-            // Drive with left bumper as boost mode (inverted from slow mode)
+            // Drive - this runs every loop for responsive controls
             drive.drive(
                     gamepad1.left_stick_x * 1.1,
                     -gamepad1.left_stick_y,
@@ -71,15 +120,10 @@ public class BLUEMecanumTeleOp extends LinearOpMode {
                     boostModeValue
             );
 
-            // SHOOTING: DPAD UP - Extend servo and run intake
+            // SHOOTING: DPAD UP
             if (gamepad1.dpad_up) {
                 shooter.shoot();
-                // Use slower intake for fixed mode, normal speed for dynamic mode
-                if (dynamicMode) {
-                    intake.intakeIn();
-                } else {
-                    intake.intakeInReduced();
-                }
+                intake.intakeInReduced();
             }
             // Not shooting
             else {
@@ -90,62 +134,68 @@ public class BLUEMecanumTeleOp extends LinearOpMode {
                     intake.intakeIn();
                 } else if (gamepad1.dpad_down) {
                     intake.intakeOut();
+                    // Reset vibration when outtaking
+                    if (sensorsAvailable) {
+                        try {
+                            distanceSensors.resetVibrationState();
+                        } catch (Exception e) {
+                            // Ignore
+                        }
+                    }
                 } else {
                     intake.stop();
                 }
             }
 
-            // Turret control - switch between IMU tracking and 0 degree position
-            if (turretTrackingEnabled) {
-                // IMU-based tracking
-                double imuHeading = drive.getHeading();
-                double targetAngle = dynamicMode ? -45 - imuHeading : -65 - imuHeading;
-                turret.moveToAngle(targetAngle, 0.8);
-            } else {
-                // 0 degree position
-                turret.moveToAngle(0, 0.8);
+            // Update cached heading less frequently
+            if (headingUpdateCounter++ % HEADING_UPDATE_INTERVAL == 0) {
+                cachedHeading = drive.getHeading();
             }
 
-            // Telemetry
-            telemetry.addData("=== DRIVE ===", "");
-            telemetry.addData("IMU Heading", "%.1f°", drive.getHeading());
-            telemetry.addData("Boost Mode", gamepad1.left_bumper ? "BOOST (100%)" : "NORMAL (60%)");
-            telemetry.addData("", "");
-            telemetry.addData("=== TURRET ===", "");
+            // Turret control - only update every N loops (BLUE SIDE: negative angles)
+            if (loopCounter % TURRET_UPDATE_INTERVAL == 0) {
+                double targetAngle;
+                if (turretTrackingEnabled) {
+                    targetAngle = dynamicMode ? -43 - cachedHeading : -65 - cachedHeading;
 
-            if (!turretTrackingEnabled) {
-                telemetry.addData("Tracking Mode", "0° POSITION");
-                telemetry.addData("Target Angle", "0°");
-            }
-            else {
-                telemetry.addData("Tracking Mode", "IMU TRACKING");
-                double imuHeading = drive.getHeading();
-                double targetAngle = dynamicMode ? -45 - imuHeading : -65 - imuHeading;
-                telemetry.addData("Target Angle", "%.1f°", targetAngle);
+                    // Only update turret if change is significant
+                    if (Math.abs(targetAngle - lastTurretTarget) > TURRET_DEADBAND) {
+                        turret.moveToAngle(targetAngle, 1);
+                        lastTurretTarget = targetAngle;
+                    }
+                } else {
+                    // Keep turret at 0 degrees (forward)
+                    targetAngle = 0;
+                    if (Math.abs(lastTurretTarget) > TURRET_DEADBAND) {
+                        turret.moveToAngle(0, 0.8);
+                        lastTurretTarget = 0;
+                    }
+                }
             }
 
-            telemetry.addData("Press Triangle to Switch Mode", "");
-            telemetry.addData("", "");
-            telemetry.addData("=== SHOOTER ===", "");
-            telemetry.addData("Mode", dynamicMode ? "DYNAMIC" : "FIXED");
-            telemetry.addData("Target Velocity", dynamicMode ? ShooterSystem.VELOCITY_DYNAMIC : ShooterSystem.VELOCITY_FIXED);
-            telemetry.addData("Current Velocity", "%.0f", shooter.getVelocity());
-            telemetry.addData("At Target RPM", shooter.isAtTargetVelocity(dynamicMode) ? "YES" : "NO");
-            telemetry.addData("Servo Position", gamepad1.dpad_up ? "SHOOTING" : "HOME");
-            telemetry.addData("Intake Speed", gamepad1.dpad_up ? (dynamicMode ? "NORMAL" : "SLOW") : "---");
-            telemetry.addData("", "");
-            telemetry.addData("=== CONTROLS ===", "");
-            telemetry.addData("Left Bumper", "Boost Mode (100% speed)");
-            telemetry.addData("Right Bumper", "Normal Intake");
-            telemetry.addData("DPAD Down", "Outtake");
-            telemetry.addData("DPAD Up", "Shoot (servo + intake)");
-            telemetry.addData("X", "Toggle Dynamic/Fixed Mode");
-            telemetry.addData("Triangle", "Switch: IMU Tracking ↔ 0° Position");
-            telemetry.addData("Options", "Reset IMU Heading");
-            telemetry.update();
+            // Update telemetry only every N cycles
+            if (loopCounter % TELEMETRY_UPDATE_INTERVAL == 0) {
+                telemetry.addData("=== DRIVE ===", "");
+                telemetry.addData("IMU Heading", "%.1f°", cachedHeading);
+                telemetry.addData("Boost", gamepad1.left_bumper ? "ON" : "OFF");
+
+                telemetry.addData("=== TURRET ===", "");
+                telemetry.addData("Mode", turretTrackingEnabled ? "TRACKING" : "LOCKED 0°");
+                telemetry.addData("Target", "%.1f°", lastTurretTarget);
+                telemetry.addData("Current", "%.1f°", turret.getCurrentAngle());
+
+                telemetry.addData("=== SHOOTER ===", "");
+                telemetry.addData("Mode", dynamicMode ? "DYNAMIC" : "FIXED");
+                telemetry.addData("RPM", "%.0f / %.0f", shooter.getVelocity(),
+                        shooter.getTargetVelocity(dynamicMode));
+                telemetry.addData("Ready", shooter.isAtTargetVelocity(dynamicMode) ? "YES" : "NO");
+
+                telemetry.update();
+            }
         }
 
-        // Stop shooter when match ends
+        // Stop all systems when match ends
         shooter.stop();
+        intake.stop();
     }
 }

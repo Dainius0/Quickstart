@@ -16,8 +16,8 @@ import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 import org.firstinspires.ftc.teamcode.subsystems.ShooterSystem;
 
-@Autonomous(name = "BLUE 18 Artifact Auto")
-public class Auto_18_Artifact extends OpMode {
+@Autonomous(name = "RED 18 Artifact Auto")
+public class REDAuto_18_Artifact extends OpMode {
     private Follower follower;
     private Timer pathTimer, opModeTimer, shootingTimer, intakeWaitTimer;
 
@@ -29,7 +29,7 @@ public class Auto_18_Artifact extends OpMode {
     private IMU imu;
 
     // Continuous shooting constants
-    private static final long CONTINUOUS_SHOOT_DURATION = 1000;
+    private static final long CONTINUOUS_SHOOT_DURATION = 1100;
     private static final long INTAKE_WAIT_DURATION = 1400;
 
     // Turret constants
@@ -82,16 +82,16 @@ public class Auto_18_Artifact extends OpMode {
 
     PathState pathState;
 
-    // BLUE SIDE - Original coordinates, heading = 180°
-    private final Pose startPose = new Pose(36, 135, Math.toRadians(180));
-    private final Pose shootPose = new Pose(48, 88, Math.toRadians(180));
+    // RED SIDE - Mirrored X coordinates (144 - original_x), Y stays same, heading = 0°
+    private final Pose startPose = new Pose(108, 135, Math.toRadians(0));  // Mirrored from (36, 135, 180°)
+    private final Pose shootPose = new Pose(96, 88, Math.toRadians(0));    // Mirrored from (48, 88, 180°)
 
-    // Intake points
-    private final Pose intakeEndPoint = new Pose(14.8, 60, Math.toRadians(180));
-    private final Pose intakePoint3 = new Pose(11.2, 61.1, Math.toRadians(150));
-    private final Pose intakePoint4 = new Pose(17, 82, Math.toRadians(180));
-    private final Pose intakePoint5 = new Pose(17, 36, Math.toRadians(180));
-    private final Pose finalPose = new Pose(48, 66, Math.toRadians(180));
+    // Mirrored intake points
+    private final Pose intakeEndPoint = new Pose(129.2, 60, Math.toRadians(0));     // Mirrored from (14.8, 60, 180°)
+    private final Pose intakePoint3 = new Pose(132.8, 62.1, Math.toRadians(30));    // Mirrored from (12.2, 61.5, 155°)
+    private final Pose intakePoint4 = new Pose(129, 81, Math.toRadians(0));         // Mirrored from (17, 82, 180°)
+    private final Pose intakePoint5 = new Pose(132, 32, Math.toRadians(0));         // Mirrored from (17, 36, 180°)
+    private final Pose finalPose = new Pose(96, 66, Math.toRadians(0));             // Mirrored from (48, 66, 180°)
 
     // Path chains
     private PathChain driveToShootPos;
@@ -109,89 +109,89 @@ public class Auto_18_Artifact extends OpMode {
                 .setLinearHeadingInterpolation(startPose.getHeading(), shootPose.getHeading())
                 .build();
 
-        // CYCLE 1: shootPose -> intakeEndPoint
-        Pose control1_1 = new Pose(48, 62, Math.toRadians(180));
-        Pose control2_1 = new Pose(50.2, 59.7, Math.toRadians(180));
+        // CYCLE 1: shootPose -> intakeEndPoint (mirrored control points)
+        Pose control1_1 = new Pose(96, 62, Math.toRadians(0));        // Mirrored from (48, 62, 180°)
+        Pose control2_1 = new Pose(93.8, 59.7, Math.toRadians(0));    // Mirrored from (50.2, 59.7, 180°)
         driveToIntake1 = follower.pathBuilder()
                 .addPath(new BezierCurve(shootPose, control1_1, control2_1, intakeEndPoint))
                 .setLinearHeadingInterpolation(shootPose.getHeading(), intakeEndPoint.getHeading())
                 .build();
 
-        // Return: intakeEndPoint -> shootPose
-        Pose control1_1r = new Pose(33, 61, Math.toRadians(180));
-        Pose control2_1r = new Pose(47, 74.7, Math.toRadians(180));
+        // Return: intakeEndPoint -> shootPose (mirrored)
+        Pose control1_1r = new Pose(111, 61, Math.toRadians(0));      // Mirrored from (33, 61, 180°)
+        Pose control2_1r = new Pose(97, 74.7, Math.toRadians(0));     // Mirrored from (47, 74.7, 180°)
         returnToShoot1 = follower.pathBuilder()
                 .addPath(new BezierCurve(intakeEndPoint, control1_1r, control2_1r, shootPose))
                 .setLinearHeadingInterpolation(intakeEndPoint.getHeading(), shootPose.getHeading())
                 .build();
 
-        // CYCLE 2: shootPose -> intakePoint3
-        Pose control1_2 = new Pose(45.2, 57.3, Math.toRadians(180));
-        Pose control2_2 = new Pose(23.5, 63, Math.toRadians(160));
+        // CYCLE 2: shootPose -> intakePoint3 (mirrored)
+        Pose control1_2 = new Pose(98.8, 57.3, Math.toRadians(0));    // Mirrored from (45.2, 57.3, 180°)
+        Pose control2_2 = new Pose(120.5, 63, Math.toRadians(20));    // Mirrored from (23.5, 63, 160°)
         driveToIntake2 = follower.pathBuilder()
                 .addPath(new BezierCurve(shootPose, control1_2, control2_2, intakePoint3))
                 .setLinearHeadingInterpolation(shootPose.getHeading(), intakePoint3.getHeading())
                 .build();
 
-        // Return: intakePoint3 -> shootPose
-        Pose control1_2r = new Pose(27.5, 64.7, Math.toRadians(160));
-        Pose control2_2r = new Pose(36, 66, Math.toRadians(180));
+        // Return: intakePoint3 -> shootPose (mirrored)
+        Pose control1_2r = new Pose(116.5, 64.7, Math.toRadians(20)); // Mirrored from (27.5, 64.7, 160°)
+        Pose control2_2r = new Pose(108, 66, Math.toRadians(0));      // Mirrored from (36, 66, 180°)
         returnToShoot2 = follower.pathBuilder()
                 .addPath(new BezierCurve(intakePoint3, control1_2r, control2_2r, shootPose))
                 .setLinearHeadingInterpolation(intakePoint3.getHeading(), shootPose.getHeading())
                 .build();
 
-        // CYCLE 3: shootPose -> intakePoint3
-        Pose control1_3 = new Pose(45.2, 57.3, Math.toRadians(180));
-        Pose control2_3 = new Pose(23.5, 63, Math.toRadians(160));
+        // CYCLE 3: shootPose -> intakePoint3 (mirrored)
+        Pose control1_3 = new Pose(98.8, 57.3, Math.toRadians(0));    // Mirrored from (45.2, 57.3, 180°)
+        Pose control2_3 = new Pose(120.5, 63, Math.toRadians(20));    // Mirrored from (23.5, 63, 160°)
         driveToIntake3 = follower.pathBuilder()
                 .addPath(new BezierCurve(shootPose, control1_3, control2_3, intakePoint3))
                 .setLinearHeadingInterpolation(shootPose.getHeading(), intakePoint3.getHeading())
                 .build();
 
-        // Return: intakePoint3 -> shootPose
-        Pose control1_3r = new Pose(27.5, 64.7, Math.toRadians(160));
-        Pose control2_3r = new Pose(36, 66, Math.toRadians(180));
+        // Return: intakePoint3 -> shootPose (mirrored)
+        Pose control1_3r = new Pose(116.5, 64.7, Math.toRadians(20)); // Mirrored from (27.5, 64.7, 160°)
+        Pose control2_3r = new Pose(108, 66, Math.toRadians(0));      // Mirrored from (36, 66, 180°)
         returnToShoot3 = follower.pathBuilder()
                 .addPath(new BezierCurve(intakePoint3, control1_3r, control2_3r, shootPose))
                 .setLinearHeadingInterpolation(intakePoint3.getHeading(), shootPose.getHeading())
                 .build();
 
-        // CYCLE 4: shootPose -> intakePoint4
-        Pose control1_4 = new Pose(44.8, 87, Math.toRadians(180));
-        Pose control2_4 = new Pose(40.5, 83.3, Math.toRadians(180));
+        // CYCLE 4: shootPose -> intakePoint4 (mirrored)
+        Pose control1_4 = new Pose(99.2, 87, Math.toRadians(0));      // Mirrored from (44.8, 87, 180°)
+        Pose control2_4 = new Pose(103.5, 83.3, Math.toRadians(0));   // Mirrored from (40.5, 83.3, 180°)
         driveToIntake4 = follower.pathBuilder()
                 .addPath(new BezierCurve(shootPose, control1_4, control2_4, intakePoint4))
                 .setLinearHeadingInterpolation(shootPose.getHeading(), intakePoint4.getHeading())
                 .build();
 
-        // Return: intakePoint4 -> shootPose
-        Pose control1_4r = new Pose(40.5, 83.3, Math.toRadians(180));
-        Pose control2_4r = new Pose(44.6, 84.4, Math.toRadians(180));
+        // Return: intakePoint4 -> shootPose (mirrored)
+        Pose control1_4r = new Pose(103.5, 83.3, Math.toRadians(0));  // Mirrored from (40.5, 83.3, 180°)
+        Pose control2_4r = new Pose(99.4, 84.4, Math.toRadians(0));   // Mirrored from (44.6, 84.4, 180°)
         returnToShoot4 = follower.pathBuilder()
                 .addPath(new BezierCurve(intakePoint4, control1_4r, control2_4r, shootPose))
                 .setLinearHeadingInterpolation(intakePoint4.getHeading(), shootPose.getHeading())
                 .build();
 
-        // CYCLE 5: shootPose -> intakePoint5
-        Pose control1_5 = new Pose(49, 47, Math.toRadians(180));
-        Pose control2_5 = new Pose(48.5, 33.8, Math.toRadians(180));
+        // CYCLE 5: shootPose -> intakePoint5 (mirrored)
+        Pose control1_5 = new Pose(95, 46, Math.toRadians(0));        // Mirrored from (49, 47, 180°)
+        Pose control2_5 = new Pose(95.5, 32.8, Math.toRadians(0));    // Mirrored from (48.5, 33.8, 180°)
         driveToIntake5 = follower.pathBuilder()
                 .addPath(new BezierCurve(shootPose, control1_5, control2_5, intakePoint5))
                 .setLinearHeadingInterpolation(shootPose.getHeading(), intakePoint5.getHeading())
                 .build();
 
-        // Return: intakePoint5 -> shootPose
-        Pose control1_5r = new Pose(30, 36, Math.toRadians(180));
-        Pose control2_5r = new Pose(48, 56, Math.toRadians(180));
+        // Return: intakePoint5 -> shootPose (mirrored)
+        Pose control1_5r = new Pose(114, 36, Math.toRadians(0));      // Mirrored from (30, 36, 180°)
+        Pose control2_5r = new Pose(96, 56, Math.toRadians(0));       // Mirrored from (48, 56, 180°)
         returnToShoot5 = follower.pathBuilder()
                 .addPath(new BezierCurve(intakePoint5, control1_5r, control2_5r, shootPose))
                 .setLinearHeadingInterpolation(intakePoint5.getHeading(), shootPose.getHeading())
                 .build();
 
-        // FINAL POSITION: shootPose -> finalPose
-        Pose controlFinal1 = new Pose(48, 81, Math.toRadians(180));
-        Pose controlFinal2 = new Pose(48, 71, Math.toRadians(180));
+        // FINAL POSITION: shootPose -> finalPose (mirrored)
+        Pose controlFinal1 = new Pose(96, 81, Math.toRadians(0));     // Mirrored from (48, 81, 180°)
+        Pose controlFinal2 = new Pose(96, 71, Math.toRadians(0));     // Mirrored from (48, 71, 180°)
         driveToFinalPosition = follower.pathBuilder()
                 .addPath(new BezierCurve(shootPose, controlFinal1, controlFinal2, finalPose))
                 .setLinearHeadingInterpolation(shootPose.getHeading(), finalPose.getHeading())
@@ -445,7 +445,7 @@ public class Auto_18_Artifact extends OpMode {
                     shooterSystem.stop();
                     stopIntake();
                     telemetry.addLine("=== AUTONOMOUS COMPLETE ===");
-                    telemetry.addData("Final Position", "x=48, y=66, heading=180°");
+                    telemetry.addData("Final Position", "x=96, y=66, heading=0°");
                     telemetry.addData("Turret Position", "Home (0 degrees)");
                 }
                 break;
@@ -498,10 +498,10 @@ public class Auto_18_Artifact extends OpMode {
         }
     }
 
-    // BLUE SIDE: Turret angle is negative
+    // RED SIDE: Turret angle is positive (opposite of BLUE)
     private void alignTurretDynamic() {
         double imuHeading = imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.DEGREES);
-        double targetAngle = -47.1 + imuHeading;  // Negative for BLUE side
+        double targetAngle = 47 - imuHeading;  // Positive for RED side
         targetAngle = Math.max(MIN_TURRET_ANGLE, Math.min(MAX_TURRET_ANGLE, targetAngle));
         moveTurretToAngle(targetAngle, 1);
     }
@@ -555,8 +555,8 @@ public class Auto_18_Artifact extends OpMode {
         buildPaths();
         follower.setPose(startPose);
 
-        telemetry.addLine("=== BLUE SIDE AUTONOMOUS ===");
-        telemetry.addLine("6 Shooting Cycles");
+        telemetry.addLine("=== RED SIDE AUTONOMOUS ===");
+        telemetry.addLine("6 Shooting Cycles - Mirrored Paths");
         telemetry.addLine("Intake pauses at points 2 and 3 (1400ms each)");
         telemetry.addLine("IntakePoint3 paths set to 0.75 power");
         telemetry.addLine("IMU initialized and reset");
@@ -581,6 +581,6 @@ public class Auto_18_Artifact extends OpMode {
         telemetry.addData("x", follower.getPose().getX());
         telemetry.addData("y", follower.getPose().getY());
         telemetry.addData("heading", Math.toDegrees(follower.getPose().getHeading()));
-        telemetry.update();
+            telemetry.update();
+        }
     }
-}

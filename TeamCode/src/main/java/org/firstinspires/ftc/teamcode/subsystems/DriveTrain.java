@@ -3,20 +3,33 @@ package org.firstinspires.ftc.teamcode.subsystems;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.HardwareMap;
-import com.qualcomm.robotcore.hardware.IMU;
-import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
+import com.qualcomm.hardware.gobilda.GoBildaPinpointDriver;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
+import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
+import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 
 public class DriveTrain {
     private DcMotor frontLeftMotor, backLeftMotor, frontRightMotor, backRightMotor;
-    private IMU imu;
+    private GoBildaPinpointDriver pinpoint;
+
+    // TUNING CONSTANT: Compensate for center of mass being toward back
+    // When strafing, this adds counter-rotation to prevent the robot from spinning
+    // Positive values = add clockwise rotation when strafing right
+    // Negative values = add counter-clockwise rotation when strafing right
+    // Start with 0.15-0.25 and adjust based on testing
+    private static final double STRAFE_ROTATION_COMPENSATION = 0.05;
+
+    // Cache the last heading to avoid redundant Pinpoint updates
+    private double cachedHeading = 0;
+    private long lastHeadingUpdateTime = 0;
+    private static final long HEADING_CACHE_MS = 10; // Cache heading for 10ms
 
     // Original constructor - keeps existing behavior
     public DriveTrain(HardwareMap hardwareMap) {
-        this(hardwareMap, true);  // Calls the new constructor with resetYaw = true
+        this(hardwareMap, true);
     }
 
-    // New constructor with option to preserve IMU heading
+    // New constructor with option to preserve heading
     public DriveTrain(HardwareMap hardwareMap, boolean resetYaw) {
         // Initialize motors
         frontLeftMotor = hardwareMap.dcMotor.get("frontLeftMotor");
@@ -32,39 +45,55 @@ public class DriveTrain {
         frontRightMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         backRightMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
 
-        // Initialize IMU with same parameters as autonomous
-        imu = hardwareMap.get(IMU.class, "imu");
-        IMU.Parameters parameters = new IMU.Parameters(new RevHubOrientationOnRobot(
-                RevHubOrientationOnRobot.LogoFacingDirection.LEFT,
-                RevHubOrientationOnRobot.UsbFacingDirection.UP));
-        imu.initialize(parameters);
+        // Get Pinpoint - it's already configured by Pedro Pathing
+        pinpoint = hardwareMap.get(GoBildaPinpointDriver.class, "pinpoint");
 
-        // Only reset yaw if requested
+        // Reset IMU if requested
         if (resetYaw) {
-            imu.resetYaw();
+            pinpoint.recalibrateIMU();
         }
+
+        // Initialize cached heading
+        pinpoint.update();
+        cachedHeading = pinpoint.getPosition().getHeading(AngleUnit.RADIANS);
+        lastHeadingUpdateTime = System.currentTimeMillis();
     }
 
     public void drive(double x, double y, double rx, double slowModeTrigger) {
-        double botHeading = imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.RADIANS);
+        // Update heading from cache or refresh if needed
+        long currentTime = System.currentTimeMillis();
+        if (currentTime - lastHeadingUpdateTime > HEADING_CACHE_MS) {
+            pinpoint.update();
+            cachedHeading = pinpoint.getPosition().getHeading(AngleUnit.RADIANS);
+            lastHeadingUpdateTime = currentTime;
+        }
+
+        // Use cached heading for field-centric calculation
+        double botHeading = cachedHeading;
 
         double rotX = x * Math.cos(-botHeading) - y * Math.sin(-botHeading);
         double rotY = x * Math.sin(-botHeading) + y * Math.cos(-botHeading);
 
         rotX = rotX * 1.1;
 
-        // Apply slow mode if trigger is pressed - 80% speed when fully pressed
-        double speedMultiplier = 1.0 - (slowModeTrigger * 0.3);  // Reduces by 20%, leaving 80%
+        // Apply strafe compensation - add counter-rotation based on strafe direction
+        // This counteracts unwanted rotation caused by center of mass being toward back
+        double compensatedRx = rx + (rotX * STRAFE_ROTATION_COMPENSATION);
+
+        // Apply slow mode if trigger is pressed
+        double speedMultiplier = 1.0 - (slowModeTrigger * 0.3);
         rotX *= speedMultiplier;
         rotY *= speedMultiplier;
-        rx *= speedMultiplier;
+        compensatedRx *= speedMultiplier;
 
-        double denominator = Math.max(Math.abs(rotY) + Math.abs(rotX) + Math.abs(rx), 1);
-        double frontLeftPower = (rotY + rotX + rx) / denominator;
-        double backLeftPower = (rotY - rotX + rx) / denominator;
-        double frontRightPower = (rotY - rotX - rx) / denominator;
-        double backRightPower = (rotY + rotX - rx) / denominator;
+        // Calculate motor powers with compensation
+        double denominator = Math.max(Math.abs(rotY) + Math.abs(rotX) + Math.abs(compensatedRx), 1);
+        double frontLeftPower = (rotY + rotX + compensatedRx) / denominator;
+        double backLeftPower = (rotY - rotX + compensatedRx) / denominator;
+        double frontRightPower = (rotY - rotX - compensatedRx) / denominator;
+        double backRightPower = (rotY + rotX - compensatedRx) / denominator;
 
+        // Set motor powers
         frontLeftMotor.setPower(frontLeftPower);
         backLeftMotor.setPower(backLeftPower);
         frontRightMotor.setPower(frontRightPower);
@@ -72,10 +101,42 @@ public class DriveTrain {
     }
 
     public void resetHeading() {
-        imu.resetYaw();
+        // Force an update first to get current position
+        pinpoint.update();
+
+        // Get current X and Y coordinates
+        Pose2D currentPos = pinpoint.getPosition();
+        double currentX = currentPos.getX(DistanceUnit.MM);
+        double currentY = currentPos.getY(DistanceUnit.MM);
+
+        // Reset position with heading set to 0
+        pinpoint.setPosition(new Pose2D(DistanceUnit.MM, currentX, currentY, AngleUnit.DEGREES, 0));
+
+        // Force another update to apply the change
+        pinpoint.update();
+
+        // Update cached heading
+        cachedHeading = 0;
+        lastHeadingUpdateTime = System.currentTimeMillis();
     }
 
     public double getHeading() {
-        return imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.DEGREES);
+        // Update cache if needed
+        long currentTime = System.currentTimeMillis();
+        if (currentTime - lastHeadingUpdateTime > HEADING_CACHE_MS) {
+            pinpoint.update();
+            cachedHeading = pinpoint.getPosition().getHeading(AngleUnit.RADIANS);
+            lastHeadingUpdateTime = currentTime;
+        }
+
+        // Convert cached heading from radians to degrees for return
+        return Math.toDegrees(cachedHeading);
+    }
+
+    /**
+     * Get the Pinpoint driver for advanced usage
+     */
+    public GoBildaPinpointDriver getPinpoint() {
+        return pinpoint;
     }
 }
