@@ -29,7 +29,7 @@ public class Auto_18_Artifact extends OpMode {
     private IMU imu;
 
     // Continuous shooting constants
-    private static final long CONTINUOUS_SHOOT_DURATION = 1000;
+    private static final long CONTINUOUS_SHOOT_DURATION = 1100;
     private static final long INTAKE_WAIT_DURATION = 1400;
 
     // Turret constants
@@ -90,7 +90,7 @@ public class Auto_18_Artifact extends OpMode {
     private final Pose intakeEndPoint = new Pose(14.8, 60, Math.toRadians(180));
     private final Pose intakePoint3 = new Pose(11.2, 61.1, Math.toRadians(150));
     private final Pose intakePoint4 = new Pose(17, 82, Math.toRadians(180));
-    private final Pose intakePoint5 = new Pose(17, 36, Math.toRadians(180));
+    private final Pose intakePoint5 = new Pose(17, 35, Math.toRadians(180));
     private final Pose finalPose = new Pose(48, 66, Math.toRadians(180));
 
     // Path chains
@@ -103,6 +103,7 @@ public class Auto_18_Artifact extends OpMode {
     private PathChain driveToFinalPosition;
 
     public void buildPaths() {
+
         // Initial drive to shooting position
         driveToShootPos = follower.pathBuilder()
                 .addPath(new BezierLine(startPose, shootPose))
@@ -501,7 +502,7 @@ public class Auto_18_Artifact extends OpMode {
     // BLUE SIDE: Turret angle is negative
     private void alignTurretDynamic() {
         double imuHeading = imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.DEGREES);
-        double targetAngle = -47.1 + imuHeading;  // Negative for BLUE side
+        double targetAngle = -46 + imuHeading;  // Negative for BLUE side
         targetAngle = Math.max(MIN_TURRET_ANGLE, Math.min(MAX_TURRET_ANGLE, targetAngle));
         moveTurretToAngle(targetAngle, 1);
     }

@@ -156,7 +156,7 @@ public class REDMecanumTeleOp extends LinearOpMode {
             if (loopCounter % TURRET_UPDATE_INTERVAL == 0) {
                 double targetAngle;
                 if (turretTrackingEnabled) {
-                    targetAngle = dynamicMode ? 44 - cachedHeading : 65 - cachedHeading;
+                    targetAngle = dynamicMode ? 43 - cachedHeading : 65 - cachedHeading;
 
                     // Only update turret if change is significant
                     if (Math.abs(targetAngle - lastTurretTarget) > TURRET_DEADBAND) {

@@ -88,9 +88,9 @@ public class REDAuto_18_Artifact extends OpMode {
 
     // Mirrored intake points
     private final Pose intakeEndPoint = new Pose(129.2, 60, Math.toRadians(0));     // Mirrored from (14.8, 60, 180°)
-    private final Pose intakePoint3 = new Pose(132.8, 62.1, Math.toRadians(30));    // Mirrored from (12.2, 61.5, 155°)
+    private final Pose intakePoint3 = new Pose(134.5, 62.1, Math.toRadians(35));    // Mirrored from (12.2, 61.5, 155°)
     private final Pose intakePoint4 = new Pose(129, 81, Math.toRadians(0));         // Mirrored from (17, 82, 180°)
-    private final Pose intakePoint5 = new Pose(132, 32, Math.toRadians(0));         // Mirrored from (17, 36, 180°)
+    private final Pose intakePoint5 = new Pose(133, 32, Math.toRadians(0));         // Mirrored from (17, 36, 180°)
     private final Pose finalPose = new Pose(96, 66, Math.toRadians(0));             // Mirrored from (48, 66, 180°)
 
     // Path chains

@@ -9,7 +9,7 @@ public class ShooterSystem {
     private final DcMotorEx shooter1, shooter2;
     private final Servo shooterServo, shooterServo2, shooterAngle;
 
-    public static final double VELOCITY_DYNAMIC = 1450;
+    public static final double VELOCITY_DYNAMIC = 1460;
     public static final double VELOCITY_FIXED = 1900;
     private static final double VELOCITY_TOLERANCE = 30;
 
@@ -58,6 +58,7 @@ public class ShooterSystem {
 
     public void setVelocity(boolean dynamicMode) {
         double velocity = dynamicMode ? VELOCITY_DYNAMIC : VELOCITY_FIXED;
+
         // Both motors get same velocity value and now both spin in reverse direction
         shooter1.setVelocity(velocity);
         shooter2.setVelocity(velocity);

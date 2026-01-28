@@ -11,8 +11,15 @@ public class TurretSystem {
     private static final double MIN_TURRET_ANGLE = -210.0;
     private static final double MAX_TURRET_ANGLE = 210.0;
 
-    // Store the commanded angle for reference
+    // Increased deadband to prevent drift
+    private static final int POSITION_TOLERANCE_TICKS = 10; // Increased from 5
+
+    // Power reduction when close to target
+    private static final double HOLDING_POWER = 0.15; // Low power to hold position
+    private static final double APPROACH_POWER_SCALE = 0.5; // Reduce power when close
+
     private double targetAngle = 0.0;
+    private boolean isHolding = false;
 
     public TurretSystem(HardwareMap hwMap) {
         turret = hwMap.dcMotor.get("turretRotator");
@@ -26,11 +33,16 @@ public class TurretSystem {
         // Clamp the angle to valid range
         angleDegrees = Math.max(MIN_TURRET_ANGLE, Math.min(MAX_TURRET_ANGLE, angleDegrees));
 
+        // Only update if the angle actually changed significantly
+        if (Math.abs(angleDegrees - targetAngle) < 0.5) {
+            return; // Skip update if change is tiny
+        }
+
         // Store the target angle
         targetAngle = angleDegrees;
+        isHolding = false;
 
-        // Convert to ticks - always calculate from home position (0)
-        // This prevents accumulated drift
+        // Convert to ticks
         int targetTicks = (int) Math.round(angleDegrees * TICKS_PER_DEGREE);
 
         // Send command to motor
@@ -39,40 +51,50 @@ public class TurretSystem {
     }
 
     /**
-     * Reset the turret to home position (0 degrees)
-     * Call this when you manually reset or home the turret
+     * CRITICAL: Call this every loop to prevent drift!
      */
+    public void update() {
+        int currentPos = turret.getCurrentPosition();
+        int targetPos = turret.getTargetPosition();
+        int error = Math.abs(targetPos - currentPos);
+
+        if (error <= POSITION_TOLERANCE_TICKS) {
+            // Within deadband - use minimal holding power
+            if (!isHolding) {
+                turret.setPower(HOLDING_POWER);
+                isHolding = true;
+            }
+        } else if (error < 50) {
+            // Close to target - reduce power to prevent overshoot
+            double currentPower = turret.getPower();
+            turret.setPower(currentPower * APPROACH_POWER_SCALE);
+            isHolding = false;
+        } else {
+            // Far from target - maintain commanded power
+            isHolding = false;
+        }
+    }
+
     public void resetToHome() {
         turret.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         turret.setTargetPosition(0);
         turret.setMode(DcMotor.RunMode.RUN_TO_POSITION);
         targetAngle = 0.0;
+        isHolding = false;
     }
 
-    /**
-     * Get the current target angle
-     */
     public double getTargetAngle() {
         return targetAngle;
     }
 
-    /**
-     * Get the current actual angle based on encoder position
-     */
     public double getCurrentAngle() {
         return turret.getCurrentPosition() / TICKS_PER_DEGREE;
     }
 
-    /**
-     * Check if turret is close to target position
-     */
     public boolean isAtTarget(double toleranceDegrees) {
         return Math.abs(getCurrentAngle() - targetAngle) < toleranceDegrees;
     }
 
-    /**
-     * Get the motor for advanced control if needed
-     */
     public DcMotor getMotor() {
         return turret;
     }

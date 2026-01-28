@@ -15,7 +15,7 @@ import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 import org.firstinspires.ftc.teamcode.subsystems.ShooterSystem;
 
-@Autonomous
+
 public class REDAuto_SHORT_Range extends OpMode {
     private Follower follower;
     private Timer pathTimer, opModeTimer, shootingTimer;

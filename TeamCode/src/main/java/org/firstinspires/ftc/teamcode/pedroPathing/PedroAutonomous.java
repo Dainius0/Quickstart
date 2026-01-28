@@ -17,7 +17,7 @@ import com.qualcomm.robotcore.util.ElapsedTime;
  * - State machine execution
  * - Telemetry updates
  */
-@Autonomous(name = "Pedro Pathing Autonomous", group = "Autonomous")
+//@Autonomous(name = "Pedro Pathing Autonomous", group = "Autonomous")
 @Configurable
 public class PedroAutonomous extends OpMode {
 

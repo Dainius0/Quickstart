@@ -10,7 +10,7 @@ import com.qualcomm.robotcore.hardware.IMU;
 import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 
-@Autonomous(name = "BlueAuto")
+
 public class BLUEAuto_LONG_Range extends LinearOpMode {
 
     // Shooter velocity targets (ticks per second)
