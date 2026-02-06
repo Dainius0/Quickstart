@@ -21,7 +21,7 @@ public class REDMecanumTeleOp extends LinearOpMode {
         DriveTrain drive = new DriveTrain(hardwareMap, false);
         ShooterSystem shooter = new ShooterSystem(hardwareMap);
         IntakeSystem intake = new IntakeSystem(hardwareMap);
-        TurretSystem turret = new TurretSystem(hardwareMap);
+        TurretSystem turret = new TurretSystem(hardwareMap, telemetry);  // Updated: now passes telemetry
         DistanceSensorSystem distanceSensors = new DistanceSensorSystem();
 
         // Initialize distance sensors
@@ -152,19 +152,17 @@ public class REDMecanumTeleOp extends LinearOpMode {
                 cachedHeading = drive.getHeading();
             }
 
-            // Turret control - only update every N loops
+            // Turret control - only update every N loops (RED SIDE: positive angles)
             if (loopCounter % TURRET_UPDATE_INTERVAL == 0) {
                 double targetAngle;
                 if (turretTrackingEnabled) {
-                    targetAngle = dynamicMode ? 43 - cachedHeading : 65 - cachedHeading;
+                    targetAngle = dynamicMode ? 42 - cachedHeading : 65 - cachedHeading;
 
-                    // Only update turret if change is significant
                     if (Math.abs(targetAngle - lastTurretTarget) > TURRET_DEADBAND) {
                         turret.moveToAngle(targetAngle, 1);
                         lastTurretTarget = targetAngle;
                     }
                 } else {
-                    // Keep turret at 0 degrees (forward)
                     targetAngle = 0;
                     if (Math.abs(lastTurretTarget) > TURRET_DEADBAND) {
                         turret.moveToAngle(0, 0.8);
@@ -179,10 +177,7 @@ public class REDMecanumTeleOp extends LinearOpMode {
                 telemetry.addData("IMU Heading", "%.1f°", cachedHeading);
                 telemetry.addData("Boost", gamepad1.left_bumper ? "ON" : "OFF");
 
-                telemetry.addData("=== TURRET ===", "");
-                telemetry.addData("Mode", turretTrackingEnabled ? "TRACKING" : "LOCKED 0°");
-                telemetry.addData("Target", "%.1f°", lastTurretTarget);
-                telemetry.addData("Current", "%.1f°", turret.getCurrentAngle());
+                turret.printTelemetry();
 
                 telemetry.addData("=== SHOOTER ===", "");
                 telemetry.addData("Mode", dynamicMode ? "DYNAMIC" : "FIXED");

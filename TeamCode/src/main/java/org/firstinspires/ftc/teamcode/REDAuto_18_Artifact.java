@@ -9,8 +9,7 @@ import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.pedropathing.util.Timer;
 import com.qualcomm.robotcore.hardware.DcMotor;
-import com.qualcomm.robotcore.hardware.IMU;
-import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
+import com.qualcomm.hardware.gobilda.GoBildaPinpointDriver;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
@@ -26,11 +25,11 @@ public class REDAuto_18_Artifact extends OpMode {
 
     // Hardware
     private DcMotor intakeMotor, turretRotator;
-    private IMU imu;
+    private GoBildaPinpointDriver pinpoint;
 
     // Continuous shooting constants
-    private static final long CONTINUOUS_SHOOT_DURATION = 1100;
-    private static final long INTAKE_WAIT_DURATION = 1400;
+    private static final long CONTINUOUS_SHOOT_DURATION = 900;
+    private static final long INTAKE_WAIT_DURATION = 1100;
 
     // Turret constants
     private static final int TICKS_PER_ROTATION = 1872;
@@ -39,14 +38,15 @@ public class REDAuto_18_Artifact extends OpMode {
     private static final double MAX_TURRET_ANGLE = 90.0;
 
     // Drive speed constants
-    private static final double INTAKE_DRIVE_POWER = 0.9;
-    private static final double INTAKE_POINT3_POWER = 0.75;  // Slower for intakePoint3
+    private static final double INTAKE_DRIVE_POWER = 1;
+    private static final double INTAKE_POINT3_POWER = 0.9;  // Slower for intakePoint3
     private static final double NORMAL_DRIVE_POWER = 1.0;
 
     // State variables
     private ShootingState shootingState = ShootingState.IDLE;
     private boolean intakeActive = false;
     private boolean waitingForIntake = false;
+    private Pose holdPosition = null;  // Position to hold during intake wait
 
     public enum PathState {
         DRIVE_TO_SHOOT_POS,
@@ -87,11 +87,12 @@ public class REDAuto_18_Artifact extends OpMode {
     private final Pose shootPose = new Pose(96, 88, Math.toRadians(0));    // Mirrored from (48, 88, 180°)
 
     // Mirrored intake points
-    private final Pose intakeEndPoint = new Pose(129.2, 60, Math.toRadians(0));     // Mirrored from (14.8, 60, 180°)
-    private final Pose intakePoint3 = new Pose(134.5, 62.1, Math.toRadians(35));    // Mirrored from (12.2, 61.5, 155°)
-    private final Pose intakePoint4 = new Pose(129, 81, Math.toRadians(0));         // Mirrored from (17, 82, 180°)
-    private final Pose intakePoint5 = new Pose(133, 32, Math.toRadians(0));         // Mirrored from (17, 36, 180°)
-    private final Pose finalPose = new Pose(96, 66, Math.toRadians(0));             // Mirrored from (48, 66, 180°)
+    private final Pose intakeEndPoint = new Pose(132, 59, Math.toRadians(0));     // Mirrored from (14.8, 60, 180°)
+    private final Pose intermediatePose1 = new Pose(126.7, 63, Math.toRadians(0));  // Intermediate waypoint
+    private final Pose intakePoint3 = new Pose(136, 61, Math.toRadians(30));    // Mirrored from (12.2, 61.5, 155°)
+    private final Pose intakePoint4 = new Pose(128, 81, Math.toRadians(0));         // Mirrored from (17, 82, 180°)
+    private final Pose intakePoint5 = new Pose(136.5, 31, Math.toRadians(0));         // Mirrored from (17, 36, 180°)
+    private final Pose finalPose = new Pose(96, 68, Math.toRadians(0));             // Mirrored from (48, 66, 180°)
 
     // Path chains
     private PathChain driveToShootPos;
@@ -117,12 +118,15 @@ public class REDAuto_18_Artifact extends OpMode {
                 .setLinearHeadingInterpolation(shootPose.getHeading(), intakeEndPoint.getHeading())
                 .build();
 
-        // Return: intakeEndPoint -> shootPose (mirrored)
-        Pose control1_1r = new Pose(111, 61, Math.toRadians(0));      // Mirrored from (33, 61, 180°)
-        Pose control2_1r = new Pose(97, 74.7, Math.toRadians(0));     // Mirrored from (47, 74.7, 180°)
+        // Return: intakeEndPoint -> intermediatePose1 -> shootPose (mirrored)
+        Pose control1_1r = new Pose(120.5, 61, Math.toRadians(0));      // Control point to intermediate
+        Pose control2_1r = new Pose(110, 68, Math.toRadians(0));      // Control point from intermediate
+        Pose control3_1r = new Pose(97, 74.7, Math.toRadians(0));     // Control point to shoot
         returnToShoot1 = follower.pathBuilder()
-                .addPath(new BezierCurve(intakeEndPoint, control1_1r, control2_1r, shootPose))
-                .setLinearHeadingInterpolation(intakeEndPoint.getHeading(), shootPose.getHeading())
+                .addPath(new BezierCurve(intakeEndPoint, control1_1r, intermediatePose1))
+                .setLinearHeadingInterpolation(intakeEndPoint.getHeading(), intermediatePose1.getHeading())
+                .addPath(new BezierCurve(intermediatePose1, control2_1r, control3_1r, shootPose))
+                .setLinearHeadingInterpolation(intermediatePose1.getHeading(), shootPose.getHeading())
                 .build();
 
         // CYCLE 2: shootPose -> intakePoint3 (mirrored)
@@ -159,7 +163,7 @@ public class REDAuto_18_Artifact extends OpMode {
 
         // CYCLE 4: shootPose -> intakePoint4 (mirrored)
         Pose control1_4 = new Pose(99.2, 87, Math.toRadians(0));      // Mirrored from (44.8, 87, 180°)
-        Pose control2_4 = new Pose(103.5, 83.3, Math.toRadians(0));   // Mirrored from (40.5, 83.3, 180°)
+        Pose control2_4 = new Pose(102, 79, Math.toRadians(0));   // Mirrored from (40.5, 83.3, 180°)
         driveToIntake4 = follower.pathBuilder()
                 .addPath(new BezierCurve(shootPose, control1_4, control2_4, intakePoint4))
                 .setLinearHeadingInterpolation(shootPose.getHeading(), intakePoint4.getHeading())
@@ -258,7 +262,7 @@ public class REDAuto_18_Artifact extends OpMode {
             case DRIVE_TO_INTAKE_2:
                 if (!follower.isBusy()) {
                     startIntake();
-                    follower.setMaxPower(INTAKE_POINT3_POWER);  // Set to 0.75 for intakePoint3
+                    follower.setMaxPower(INTAKE_POINT3_POWER);  // Set to 0.8 for intakePoint3
                     follower.followPath(driveToIntake2, true);
                     setPathState(PathState.WAIT_AND_INTAKE_2);
                 }
@@ -270,14 +274,22 @@ public class REDAuto_18_Artifact extends OpMode {
                     if (!waitingForIntake) {
                         waitingForIntake = true;
                         intakeWaitTimer.resetTimer();
+                        // Capture the current position to hold
+                        holdPosition = follower.getPose();
                     }
+
+                    // Hold position by setting it as target
+                    follower.holdPoint(holdPosition);
 
                     long elapsedTime = (long)(intakeWaitTimer.getElapsedTimeSeconds() * 1000);
                     telemetry.addData("Wait Time Remaining (Point 2)", (INTAKE_WAIT_DURATION - elapsedTime) + "ms");
-                    telemetry.addData("Status", "PAUSING at intake point 2");
+                    telemetry.addData("Status", "HOLDING POSITION at intake point 2");
+                    telemetry.addData("Hold X", holdPosition.getX());
+                    telemetry.addData("Hold Y", holdPosition.getY());
 
                     if (elapsedTime >= INTAKE_WAIT_DURATION) {
                         waitingForIntake = false;
+                        holdPosition = null;
                         stopIntake();  // Stop intake before returning
                         follower.setMaxPower(NORMAL_DRIVE_POWER);
                         follower.followPath(returnToShoot2, true);
@@ -308,7 +320,7 @@ public class REDAuto_18_Artifact extends OpMode {
             case DRIVE_TO_INTAKE_3:
                 if (!follower.isBusy()) {
                     startIntake();
-                    follower.setMaxPower(INTAKE_POINT3_POWER);  // Set to 0.75 for intakePoint3
+                    follower.setMaxPower(INTAKE_POINT3_POWER);  // Set to 0.8 for intakePoint3
                     follower.followPath(driveToIntake3, true);
                     setPathState(PathState.WAIT_AND_INTAKE_3);
                 }
@@ -320,14 +332,22 @@ public class REDAuto_18_Artifact extends OpMode {
                     if (!waitingForIntake) {
                         waitingForIntake = true;
                         intakeWaitTimer.resetTimer();
+                        // Capture the current position to hold
+                        holdPosition = follower.getPose();
                     }
+
+                    // Hold position by setting it as target
+                    follower.holdPoint(holdPosition);
 
                     long elapsedTime = (long)(intakeWaitTimer.getElapsedTimeSeconds() * 1000);
                     telemetry.addData("Wait Time Remaining (Point 3)", (INTAKE_WAIT_DURATION - elapsedTime) + "ms");
-                    telemetry.addData("Status", "PAUSING at intake point 3");
+                    telemetry.addData("Status", "HOLDING POSITION at intake point 3");
+                    telemetry.addData("Hold X", holdPosition.getX());
+                    telemetry.addData("Hold Y", holdPosition.getY());
 
                     if (elapsedTime >= INTAKE_WAIT_DURATION) {
                         waitingForIntake = false;
+                        holdPosition = null;
                         stopIntake();  // Stop intake before returning
                         follower.setMaxPower(NORMAL_DRIVE_POWER);
                         follower.followPath(returnToShoot3, true);
@@ -476,7 +496,7 @@ public class REDAuto_18_Artifact extends OpMode {
         shootingState = ShootingState.SHOOTING;
         shootingTimer.resetTimer();
         shooterSystem.shoot();
-        intakeMotor.setPower(-0.8);
+        intakeMotor.setPower(-0.85);
     }
 
     private void updateShootingStateMachine() {
@@ -500,8 +520,9 @@ public class REDAuto_18_Artifact extends OpMode {
 
     // RED SIDE: Turret angle is positive (opposite of BLUE)
     private void alignTurretDynamic() {
-        double imuHeading = imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.DEGREES);
-        double targetAngle = 47 - imuHeading;  // Positive for RED side
+        pinpoint.update();  // Update Pinpoint before reading
+        double imuHeading = Math.toDegrees(pinpoint.getPosition().getHeading(AngleUnit.RADIANS));
+        double targetAngle = 44 - imuHeading;  // Positive for RED side
         targetAngle = Math.max(MIN_TURRET_ANGLE, Math.min(MAX_TURRET_ANGLE, targetAngle));
         moveTurretToAngle(targetAngle, 1);
     }
@@ -530,15 +551,9 @@ public class REDAuto_18_Artifact extends OpMode {
         turretRotator.setMode(DcMotor.RunMode.RUN_TO_POSITION);
         turretRotator.setPower(0.0);
 
-        // Initialize IMU
-        imu = hardwareMap.get(IMU.class, "imu");
-        IMU.Parameters parameters = new IMU.Parameters(new RevHubOrientationOnRobot(
-                RevHubOrientationOnRobot.LogoFacingDirection.LEFT,
-                RevHubOrientationOnRobot.UsbFacingDirection.UP));
-        imu.initialize(parameters);
-
-        // Reset IMU yaw to 0
-        imu.resetYaw();
+        // Initialize Pinpoint (replaces IMU initialization)
+        pinpoint = hardwareMap.get(GoBildaPinpointDriver.class, "pinpoint");
+        pinpoint.recalibrateIMU();  // Reset yaw to 0
     }
 
     @Override
@@ -557,9 +572,10 @@ public class REDAuto_18_Artifact extends OpMode {
 
         telemetry.addLine("=== RED SIDE AUTONOMOUS ===");
         telemetry.addLine("6 Shooting Cycles - Mirrored Paths");
-        telemetry.addLine("Intake pauses at points 2 and 3 (1400ms each)");
-        telemetry.addLine("IntakePoint3 paths set to 0.75 power");
-        telemetry.addLine("IMU initialized and reset");
+        telemetry.addLine("Intake pauses at points 2 and 3 (1300ms each)");
+        telemetry.addLine("Robot HOLDS POSITION during intake waits");
+        telemetry.addLine("IntakePoint3 paths set to 0.8 power");
+        telemetry.addLine("Pinpoint IMU initialized and reset");
         telemetry.addLine("Ready to start!");
     }
 
@@ -581,6 +597,6 @@ public class REDAuto_18_Artifact extends OpMode {
         telemetry.addData("x", follower.getPose().getX());
         telemetry.addData("y", follower.getPose().getY());
         telemetry.addData("heading", Math.toDegrees(follower.getPose().getHeading()));
-            telemetry.update();
-        }
+        telemetry.update();
     }
+}

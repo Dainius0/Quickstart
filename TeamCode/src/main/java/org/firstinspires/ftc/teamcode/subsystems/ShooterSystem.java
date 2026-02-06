@@ -9,7 +9,7 @@ public class ShooterSystem {
     private final DcMotorEx shooter1, shooter2;
     private final Servo shooterServo, shooterServo2, shooterAngle;
 
-    public static final double VELOCITY_DYNAMIC = 1460;
+    public static final double VELOCITY_DYNAMIC = 1465;
     public static final double VELOCITY_FIXED = 1900;
     private static final double VELOCITY_TOLERANCE = 30;
 
@@ -39,13 +39,13 @@ public class ShooterSystem {
 
         // Reverse shooter1 (was FORWARD, now REVERSE)
         // Don't reverse shooter2 (was REVERSE, now FORWARD)
-        shooter1.setDirection(DcMotorEx.Direction.REVERSE);
+
 
         // Improved PIDF for faster spin-up (apply to both motors)
         PIDFCoefficients pidf = new PIDFCoefficients(
-                25,      // P - increased for faster response
+                40,      // P - increased for faster response
                 0.045,   // I - helps reach target faster
-                1,       // D - reduces overshoot
+                0.5,       // D - reduces overshoot
                 12.5     // F - feedforward
         );
         shooter1.setPIDFCoefficients(DcMotorEx.RunMode.RUN_USING_ENCODER, pidf);
@@ -58,7 +58,6 @@ public class ShooterSystem {
 
     public void setVelocity(boolean dynamicMode) {
         double velocity = dynamicMode ? VELOCITY_DYNAMIC : VELOCITY_FIXED;
-
         // Both motors get same velocity value and now both spin in reverse direction
         shooter1.setVelocity(velocity);
         shooter2.setVelocity(velocity);

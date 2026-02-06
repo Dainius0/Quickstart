@@ -2,85 +2,98 @@ package org.firstinspires.ftc.teamcode.subsystems;
 
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.HardwareMap;
+import org.firstinspires.ftc.robotcore.external.Telemetry;
 
 public class TurretSystem {
     private final DcMotor turret;
+    private final Telemetry telemetry;
     private static final int TICKS_PER_ROTATION = 1879;
     private static final double TICKS_PER_DEGREE = (double) TICKS_PER_ROTATION / 360.0;
 
-    private static final double MIN_TURRET_ANGLE = -210.0;
-    private static final double MAX_TURRET_ANGLE = 210.0;
+    private static final double RUN_TO_POSITION_POWER = 0.8;
 
-    // Increased deadband to prevent drift
-    private static final int POSITION_TOLERANCE_TICKS = 10; // Increased from 5
+    // The usable range. The dead zone (cables) is the gap between these two.
+    // If you have ~37 degrees of dead space, total usable is ~323.
+    // Centered around 0 that gives you roughly -161.5 to +161.5.
+    // Adjust these if needed once you confirm the dead zone size.
+    private static final double MIN_TURRET_ANGLE = -180;
+    private static final double MAX_TURRET_ANGLE = 180;
 
-    // Power reduction when close to target
-    private static final double HOLDING_POWER = 0.15; // Low power to hold position
-    private static final double APPROACH_POWER_SCALE = 0.5; // Reduce power when close
+    private static final double RUN_TO_POSITION_POWER_VAL = 1;
 
     private double targetAngle = 0.0;
-    private boolean isHolding = false;
 
-    public TurretSystem(HardwareMap hwMap) {
+    public TurretSystem(HardwareMap hwMap, Telemetry telemetry) {
+        this.telemetry = telemetry;
         turret = hwMap.dcMotor.get("turretRotator");
         turret.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         turret.setTargetPosition(0);
         turret.setMode(DcMotor.RunMode.RUN_TO_POSITION);
         turret.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-    }
-
-    public void moveToAngle(double angleDegrees, double power) {
-        // Clamp the angle to valid range
-        angleDegrees = Math.max(MIN_TURRET_ANGLE, Math.min(MAX_TURRET_ANGLE, angleDegrees));
-
-        // Only update if the angle actually changed significantly
-        if (Math.abs(angleDegrees - targetAngle) < 0.5) {
-            return; // Skip update if change is tiny
-        }
-
-        // Store the target angle
-        targetAngle = angleDegrees;
-        isHolding = false;
-
-        // Convert to ticks
-        int targetTicks = (int) Math.round(angleDegrees * TICKS_PER_DEGREE);
-
-        // Send command to motor
-        turret.setTargetPosition(targetTicks);
-        turret.setPower(Math.abs(power));
+        turret.setPower(RUN_TO_POSITION_POWER);
     }
 
     /**
-     * CRITICAL: Call this every loop to prevent drift!
+     * Wraps an angle into the range (-180, 180].
+     * Example:  181  ->  -179
+     * Example: -200  ->   160
+     * This is what prevents the turret from trying to go the long way around.
      */
-    public void update() {
-        int currentPos = turret.getCurrentPosition();
-        int targetPos = turret.getTargetPosition();
-        int error = Math.abs(targetPos - currentPos);
+    private static double wrapAngle(double angle) {
+        while (angle > 180.0)  angle -= 360.0;
+        while (angle <= -180.0) angle += 360.0;
+        return angle;
+    }
 
-        if (error <= POSITION_TOLERANCE_TICKS) {
-            // Within deadband - use minimal holding power
-            if (!isHolding) {
-                turret.setPower(HOLDING_POWER);
-                isHolding = true;
-            }
-        } else if (error < 50) {
-            // Close to target - reduce power to prevent overshoot
-            double currentPower = turret.getPower();
-            turret.setPower(currentPower * APPROACH_POWER_SCALE);
-            isHolding = false;
-        } else {
-            // Far from target - maintain commanded power
-            isHolding = false;
+    /**
+     * Clamps the angle to the physical travel range AFTER wrapping.
+     * If the wrapped angle lands in the dead zone (beyond ±161.5),
+     * it snaps to whichever limit is closer.
+     */
+    private static double clampToRange(double angle) {
+        if (angle > MAX_TURRET_ANGLE) return MAX_TURRET_ANGLE;
+        if (angle < MIN_TURRET_ANGLE) return MIN_TURRET_ANGLE;
+        return angle;
+    }
+
+    public void moveToAngle(double angleDegrees) {
+        // 1. Wrap into (-180, 180] so we never try to go the long way around
+        angleDegrees = wrapAngle(angleDegrees);
+
+        // 2. Clamp to physical cable limits
+        angleDegrees = clampToRange(angleDegrees);
+
+        // 3. Deadband — don't bother the motor for tiny changes
+        if (Math.abs(angleDegrees - targetAngle) < 0.5) {
+            return;
         }
+
+        targetAngle = angleDegrees;
+        int targetTicks = (int) Math.round(angleDegrees * TICKS_PER_DEGREE);
+        turret.setTargetPosition(targetTicks);
+    }
+
+    public void moveToAngle(double angleDegrees, double power) {
+        moveToAngle(angleDegrees);
+    }
+
+    public void update() {
+        // RUN_TO_POSITION holds position, nothing to do here
+    }
+
+    public void printTelemetry() {
+        telemetry.addData("=== TURRET ===", "");
+        telemetry.addData("Target", "%.1f°", targetAngle);
+        telemetry.addData("Current", "%.1f°", getCurrentAngle());
+        telemetry.addData("Limits", "%.1f° to %.1f°", MIN_TURRET_ANGLE, MAX_TURRET_ANGLE);
     }
 
     public void resetToHome() {
         turret.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         turret.setTargetPosition(0);
         turret.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+        turret.setPower(RUN_TO_POSITION_POWER);
         targetAngle = 0.0;
-        isHolding = false;
     }
 
     public double getTargetAngle() {
@@ -93,6 +106,10 @@ public class TurretSystem {
 
     public boolean isAtTarget(double toleranceDegrees) {
         return Math.abs(getCurrentAngle() - targetAngle) < toleranceDegrees;
+    }
+
+    public boolean isCalibrating() {
+        return false;
     }
 
     public DcMotor getMotor() {
