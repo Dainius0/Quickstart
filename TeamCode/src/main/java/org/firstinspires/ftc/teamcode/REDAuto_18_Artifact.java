@@ -566,7 +566,7 @@ public class REDAuto_18_Artifact extends OpMode {
     public void start() {
         opModeTimer.resetTimer();
         setPathState(pathState);
-        shooterSystem.spinUp(true);
+
         alignTurretDynamic();
     }
 

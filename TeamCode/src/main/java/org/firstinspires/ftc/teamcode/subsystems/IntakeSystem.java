@@ -17,7 +17,7 @@ public class IntakeSystem {
 
     // Reduced power for shooting/force feeding
     public void intakeInReduced() {
-        intakeMotor.setPower(-0.7);  // 50% power for controlled feeding
+        intakeMotor.setPower(-1);  // 50% power for controlled feeding
     }
 
     public void intakeOut() {

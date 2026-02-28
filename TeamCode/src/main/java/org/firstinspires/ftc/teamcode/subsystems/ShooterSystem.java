@@ -7,9 +7,9 @@ import com.qualcomm.robotcore.hardware.PIDFCoefficients;
 
 public class ShooterSystem {
     private final DcMotorEx shooter1, shooter2;
-    private final Servo shooterServo, shooterServo2, shooterAngle;
+    private final Servo shooterServo, shooterServo2;
 
-    public static final double VELOCITY_DYNAMIC = 1450;
+    public static final double VELOCITY_DYNAMIC = 1380;
     public static final double VELOCITY_FIXED = 1900;
     private static final double VELOCITY_TOLERANCE = 30;
 
@@ -26,7 +26,6 @@ public class ShooterSystem {
         shooter2 = hwMap.get(DcMotorEx.class, "shooter2");
         shooterServo = hwMap.servo.get("shooterServo");
         shooterServo2 = hwMap.servo.get("shooterServo2");
-        shooterAngle = hwMap.servo.get("shooterAngle");
 
         // Initialize both motors
         shooter1.setMode(DcMotorEx.RunMode.STOP_AND_RESET_ENCODER);
@@ -44,7 +43,7 @@ public class ShooterSystem {
         // Improved PIDF for faster spin-up (apply to both motors)
         PIDFCoefficients pidf = new PIDFCoefficients(
                 25,      // P - increased for faster response
-                0.045,   // I - helps reach target faster
+                0.4,   // I - helps reach target faster
                 1,       // D - reduces overshoot
                 12.5     // F - feedforward
         );
@@ -53,7 +52,7 @@ public class ShooterSystem {
 
         shooterServo.setPosition(SERVO_HOME);
         shooterServo2.setPosition(SERVO2_HOME);
-        shooterAngle.setPosition(ANGLE_HOME);
+
     }
 
     public void setVelocity(boolean dynamicMode) {
@@ -63,22 +62,15 @@ public class ShooterSystem {
         shooter2.setVelocity(velocity);
     }
 
-    public void setAngle(boolean dynamicMode) {
-        shooterAngle.setPosition(dynamicMode ? ANGLE_DYNAMIC : ANGLE_FIXED);
-    }
 
-    // Legacy method for compatibility
-    public void spinUp(boolean dynamicMode) {
-        setVelocity(dynamicMode);
-        setAngle(dynamicMode);
-    }
+    // Legacy method for compatibilit
 
     public void stop() {
         shooter1.setVelocity(0);
         shooter2.setVelocity(0);
         shooterServo.setPosition(SERVO_HOME);
         shooterServo2.setPosition(SERVO2_HOME);
-        shooterAngle.setPosition(ANGLE_HOME);
+
     }
 
     /**
@@ -148,12 +140,8 @@ public class ShooterSystem {
         shooterServo2.setPosition(SERVO2_HOME);
     }
 
-    /**
-     * Get current angle servo position
-     */
-    public double getAnglePosition() {
-        return shooterAngle.getPosition();
-    }
+
+
 
     /**
      * Get current shooter servo 1 position
