@@ -19,6 +19,8 @@ public class TurretSystem {
     private static final double MIN_TURRET_ANGLE = -180;
     private static final double MAX_TURRET_ANGLE = 180;
 
+    private static final double RUN_TO_POSITION_POWER_VAL = 1;
+
     private double targetAngle = 0.0;
 
     public TurretSystem(HardwareMap hwMap, Telemetry telemetry) {
@@ -28,7 +30,7 @@ public class TurretSystem {
         turret.setTargetPosition(0);
         turret.setMode(DcMotor.RunMode.RUN_TO_POSITION);
         turret.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        turret.setPower(0); // Start with no power - only apply when moving
+        turret.setPower(RUN_TO_POSITION_POWER);
     }
 
     /**
@@ -69,7 +71,6 @@ public class TurretSystem {
         targetAngle = angleDegrees;
         int targetTicks = (int) Math.round(angleDegrees * TICKS_PER_DEGREE);
         turret.setTargetPosition(targetTicks);
-        turret.setPower(RUN_TO_POSITION_POWER); // Apply power when we have a new target
     }
 
     public void moveToAngle(double angleDegrees, double power) {
@@ -77,17 +78,13 @@ public class TurretSystem {
     }
 
     public void update() {
-        // Check if we're at target and cut power to prevent drift
-        if (isAtTarget(2.0)) { // Within 2 degrees
-            turret.setPower(0);
-        }
+        // RUN_TO_POSITION holds position, nothing to do here
     }
 
     public void printTelemetry() {
         telemetry.addData("=== TURRET ===", "");
         telemetry.addData("Target", "%.1f°", targetAngle);
         telemetry.addData("Current", "%.1f°", getCurrentAngle());
-        telemetry.addData("Motor Power", "%.2f", turret.getPower());
         telemetry.addData("Limits", "%.1f° to %.1f°", MIN_TURRET_ANGLE, MAX_TURRET_ANGLE);
     }
 
@@ -95,7 +92,7 @@ public class TurretSystem {
         turret.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         turret.setTargetPosition(0);
         turret.setMode(DcMotor.RunMode.RUN_TO_POSITION);
-        turret.setPower(0); // Don't apply power until we get a move command
+        turret.setPower(RUN_TO_POSITION_POWER);
         targetAngle = 0.0;
     }
 

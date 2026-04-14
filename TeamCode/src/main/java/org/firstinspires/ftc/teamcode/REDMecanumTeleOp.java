@@ -16,12 +16,27 @@ public class REDMecanumTeleOp extends LinearOpMode {
             hub.setBulkCachingMode(LynxModule.BulkCachingMode.AUTO);
         }
 
+        // ── INIT: IMU only ────────────────────────────────────────────────────
         DriveTrain drive = new DriveTrain(hardwareMap, false);
-        ShooterSystem shooter = new ShooterSystem(hardwareMap);
+        drive.update();
+        drive.resetHeading();
+
+        telemetry.addLine("=== RED SIDE TELEOP ===");
+        telemetry.addLine("IMU heading captured — facing direction is now 0°");
+        telemetry.addLine("Ready to start!");
+        telemetry.update();
+        // ─────────────────────────────────────────────────────────────────────
+
+        waitForStart();
+
+        // ── START: initialise everything else ────────────────────────────────
+        boolean dynamicMode = true;
+
+        ShooterSystem shooter = new ShooterSystem(hardwareMap, telemetry);
         IntakeSystem intake = new IntakeSystem(hardwareMap);
         TurretSystem turret = new TurretSystem(hardwareMap, telemetry);
-        DistanceSensorSystem distanceSensors = new DistanceSensorSystem();
 
+        DistanceSensorSystem distanceSensors = new DistanceSensorSystem();
         boolean sensorsAvailable = false;
         try {
             distanceSensors.init(hardwareMap);
@@ -30,9 +45,11 @@ public class REDMecanumTeleOp extends LinearOpMode {
         } catch (Exception e) {
             telemetry.addLine("Distance sensors not found");
         }
-        telemetry.update();
 
-        boolean dynamicMode = true;
+        shooter.setVelocity(dynamicMode);
+        shooter.homeServo();
+        // ─────────────────────────────────────────────────────────────────────
+
         boolean xPressed = false;
         boolean trianglePressed = false;
         boolean optionsPressed = false;
@@ -50,33 +67,25 @@ public class REDMecanumTeleOp extends LinearOpMode {
         int headingUpdateCounter = 0;
         final int HEADING_UPDATE_INTERVAL = 3;
 
-        waitForStart();
-
-        // Reset heading at start of TeleOp
-        drive.resetHeading();
-        cachedHeading = 0;
-
-        shooter.setVelocity(dynamicMode);
-        shooter.homeServo();
-
         while (opModeIsActive()) {
             loopCounter++;
 
-            // FIX 1: Poll IMU exactly once per loop
             drive.update();
+
+            // ── Software PID update — must be called every loop ──────────────
+            shooter.update();
+            // ─────────────────────────────────────────────────────────────────
 
             if (sensorsAvailable && loopCounter % DISTANCE_CHECK_INTERVAL == 0) {
                 try {
                     distanceSensors.checkThreeBallsAndVibrate(gamepad1);
-                } catch (Exception e) {
-                    // Silent fail
-                }
+                } catch (Exception e) { /* silent fail */ }
             }
 
             if (gamepad1.options && !optionsPressed) {
                 drive.resetHeading();
                 cachedHeading = 0;
-                telemetry.addLine(">>> IMU HEADING RESET! <<<");
+                telemetry.addLine(">>> IMU HEADING MANUALLY RESET! <<<");
                 telemetry.update();
                 sleep(300);
                 optionsPressed = true;
@@ -103,13 +112,13 @@ public class REDMecanumTeleOp extends LinearOpMode {
                 trianglePressed = false;
             }
 
-            double boostModeValue = gamepad1.left_bumper ? 0.0 : 2.0;
+            boolean slowMode = gamepad1.left_bumper;
 
             drive.drive(
                     gamepad1.left_stick_x * 1.1,
                     -gamepad1.left_stick_y,
                     -gamepad1.right_stick_x,
-                    boostModeValue
+                    slowMode
             );
 
             if (gamepad1.dpad_up) {
@@ -122,11 +131,8 @@ public class REDMecanumTeleOp extends LinearOpMode {
                 } else if (gamepad1.dpad_down) {
                     intake.intakeOut();
                     if (sensorsAvailable) {
-                        try {
-                            distanceSensors.resetVibrationState();
-                        } catch (Exception e) {
-                            // Ignore
-                        }
+                        try { distanceSensors.resetVibrationState(); }
+                        catch (Exception e) { /* ignore */ }
                     }
                 } else {
                     intake.stop();
@@ -138,17 +144,14 @@ public class REDMecanumTeleOp extends LinearOpMode {
             }
 
             if (loopCounter % TURRET_UPDATE_INTERVAL == 0) {
-                double targetAngle;
                 if (turretTrackingEnabled) {
-                    // FIX 2: + cachedHeading compensates correctly now that IMU sign is fixed
-                    targetAngle = dynamicMode ? 44 - cachedHeading : 65 - cachedHeading;
-
+                    // RED-specific constants and sign kept exactly as before
+                    double targetAngle = dynamicMode ? 44 - cachedHeading : 65 - cachedHeading;
                     if (Math.abs(targetAngle - lastTurretTarget) > TURRET_DEADBAND) {
                         turret.moveToAngle(targetAngle, 1);
                         lastTurretTarget = targetAngle;
                     }
                 } else {
-                    targetAngle = 0;
                     if (Math.abs(lastTurretTarget) > TURRET_DEADBAND) {
                         turret.moveToAngle(0, 0.8);
                         lastTurretTarget = 0;
@@ -157,20 +160,12 @@ public class REDMecanumTeleOp extends LinearOpMode {
             }
 
             if (loopCounter % TELEMETRY_UPDATE_INTERVAL == 0) {
-                telemetry.addData("=== DRIVE ===", "");
                 telemetry.addData("IMU Heading", "%.1f°", cachedHeading);
-                telemetry.addData("Boost", gamepad1.left_bumper ? "ON" : "OFF");
+                telemetry.addData("Slow Mode", gamepad1.left_bumper ? "ON" : "OFF");
 
-                telemetry.addData("=== TURRET ===", "");
-                telemetry.addData("Mode", turretTrackingEnabled ? "TRACKING" : "LOCKED 0°");
-                telemetry.addData("Target", "%.1f°", lastTurretTarget);
-                telemetry.addData("Current", "%.1f°", turret.getCurrentAngle());
+                turret.printTelemetry();
 
-                telemetry.addData("=== SHOOTER ===", "");
-                telemetry.addData("Mode", dynamicMode ? "DYNAMIC" : "FIXED");
-                telemetry.addData("RPM", "%.0f / %.0f", shooter.getVelocity(),
-                        shooter.getTargetVelocity(dynamicMode));
-                telemetry.addData("Ready", shooter.isAtTargetVelocity(dynamicMode) ? "YES" : "NO");
+                shooter.addTelemetry(dynamicMode);
 
                 telemetry.update();
             }

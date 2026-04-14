@@ -533,7 +533,7 @@ public class BLUEAuto_18_Artifact extends OpMode {
     // -----------------------------------------------------------------------
     private void initializeHardware() {
         // ShooterSystem manages shooter1, shooter2, shooterServo, shooterServo2
-        shooterSystem = new ShooterSystem(hardwareMap);
+        shooterSystem = new ShooterSystem(hardwareMap, telemetry);
 
         intakeMotor = hardwareMap.dcMotor.get("intakeMotor");
         intakeMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
