@@ -12,8 +12,8 @@ public class ShooterSystem {
     private final Telemetry telemetry;   // may be null — all usages are null-safe
 
     // Target velocities in ticks/sec (28 CPR, no gearbox)
-    public static final double VELOCITY_DYNAMIC   = 1200;
-    public static final double VELOCITY_FIXED     = 1600;
+    public static final double VELOCITY_DYNAMIC   = 1150;
+    public static final double VELOCITY_FIXED     = 1550;
     private static final double VELOCITY_TOLERANCE = 15;
 
     // Confirmed true max ticks/sec at full power
@@ -21,7 +21,7 @@ public class ShooterSystem {
 
     // Software PID — feedforward is simply targetVelocity / MAX_VELOCITY
     private static final double kP = 0.006;
-    private static final double kI = 0.0001;
+    private static final double kI = 0.0000;
     private static final double kD = 0.00;
 
     // PID state — separate per motor
