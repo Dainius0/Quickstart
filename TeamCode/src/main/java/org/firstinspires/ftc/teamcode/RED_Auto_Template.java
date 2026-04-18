@@ -33,7 +33,7 @@ import org.firstinspires.ftc.teamcode.subsystems.ShooterSystem;
  * Every shoot state is preceded by a 300ms PRE_SHOOT_PAUSE where the robot
  * settles and the flywheel stays spinning before the servo fires.
  */
-@Autonomous(name = "RED Auto Template")
+//@Autonomous(name = "RED Auto Template")
 public class RED_Auto_Template extends OpMode {
 
     // =========================================================================

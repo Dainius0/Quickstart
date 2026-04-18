@@ -16,7 +16,7 @@ import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 import org.firstinspires.ftc.teamcode.subsystems.ShooterSystem;
 
-@Autonomous(name = "RED 18 Artifact Auto")
+//@Autonomous(name = "RED 18 Artifact Auto")
 public class REDAuto_18_Artifact extends OpMode {
     private Follower follower;
     private Timer pathTimer, opModeTimer, shootingTimer, intakeWaitTimer;

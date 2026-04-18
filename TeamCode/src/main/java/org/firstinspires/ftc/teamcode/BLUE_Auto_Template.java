@@ -36,7 +36,7 @@ import org.firstinspires.ftc.teamcode.subsystems.ShooterSystem;
  *
  * Turret aim on BLUE is NEGATIVE degrees (opposite of Red).
  */
-@Autonomous(name = "BLUE Auto Template")
+//@Autonomous(name = "BLUE Auto Template")
 public class BLUE_Auto_Template extends OpMode {
 
     // =========================================================================
@@ -63,7 +63,7 @@ public class BLUE_Auto_Template extends OpMode {
     private static final boolean DYNAMIC_MODE = true;
 
     /** How long the pusher servos stay extended each shooting window (ms). */
-    private static final long SHOOT_DURATION = 1000;
+    private static final long SHOOT_DURATION = 800;
 
     // =========================================================================
     // Timing constants
@@ -83,7 +83,7 @@ public class BLUE_Auto_Template extends OpMode {
     // =========================================================================
     // Turret constants
     // =========================================================================
-    private static final int    TICKS_PER_ROTATION = 1872;
+    private static final int    TICKS_PER_ROTATION = 1879; // FIXED: was 1872, matched to TurretSystem
     private static final double TICKS_PER_DEGREE   = (double) TICKS_PER_ROTATION / 360.0;
     private static final double MIN_TURRET_ANGLE   = -90.0;
     private static final double MAX_TURRET_ANGLE   =  90.0;
@@ -160,24 +160,24 @@ public class BLUE_Auto_Template extends OpMode {
     // =========================================================================
     // Field poses  (Blue side — robot faces 180°, mirrored: X_blue = 144 - X_red)
     // =========================================================================
-    private final Pose startPose         = new Pose( 36,   136, Math.toRadians(180)); // Red: (108, 136, 0°)
-    private final Pose shootPose         = new Pose( 50,    86, Math.toRadians(180)); // Red: ( 94,  86, 0°)
+    private final Pose startPose         = new Pose( 36,   136, Math.toRadians(180));
+    private final Pose shootPose         = new Pose( 50,    86, Math.toRadians(180));
 
     // Cycle 1 — straight intake + intermediate
-    private final Pose intakePoint1      = new Pose( 14.8,  60, Math.toRadians(180)); // Red: (129.2, 60, 0°)
-    private final Pose intermediatePoint = new Pose( 16,    65, Math.toRadians(180)); // Red: (125,   64, 0°)
+    private final Pose intakePoint1      = new Pose( 14.8,  60, Math.toRadians(180));
+    private final Pose intermediatePoint = new Pose( 16,    65, Math.toRadians(180));
 
     // Cycle 2 — angled intake (robot rotates to 145° = mirror of 35°)
-    private final Pose intakePoint3      = new Pose( 9.5,  60.5, Math.toRadians(150)); // Red: (133.5, 62, 35°)
+    private final Pose intakePoint3      = new Pose( 9.5,  60.5, Math.toRadians(150));
 
     // Cycle 3 — upper side
-    private final Pose intakePoint4      = new Pose( 16,    81, Math.toRadians(180)); // Red: (128, 81, 0°)
+    private final Pose intakePoint4      = new Pose( 16,    81, Math.toRadians(180));
 
     // Cycle 4 — lower side
-    private final Pose intakePoint5      = new Pose( 12,    32, Math.toRadians(180)); // Red: (132, 32, 0°)
+    private final Pose intakePoint5      = new Pose( 12,    32, Math.toRadians(180));
 
     // Park
-    private final Pose finalPose         = new Pose( 48,    66, Math.toRadians(180)); // Red: (96, 66, 0°)
+    private final Pose finalPose         = new Pose( 48,    66, Math.toRadians(180));
 
     // =========================================================================
     // Path chains
@@ -201,8 +201,6 @@ public class BLUE_Auto_Template extends OpMode {
                 .build();
 
         // --- CYCLE 1: shootPose → intakePoint1 --------------------------------
-        // Red c1_1=(96,62,0°)     → Blue=(48,62,180°)
-        // Red c2_1=(93.8,59.7,0°) → Blue=(50.2,59.7,180°)
         Pose c1_1 = new Pose(48,   62,   Math.toRadians(180));
         Pose c2_1 = new Pose(50.2, 59.7, Math.toRadians(180));
         driveToIntake1 = follower.pathBuilder()
@@ -211,7 +209,6 @@ public class BLUE_Auto_Template extends OpMode {
                 .build();
 
         // intakePoint1 → intermediate (curved inward)
-        // Red ctrl=(110,58,0°) → Blue=(34,58,180°)
         Pose intakeToInterCtrl = new Pose(34, 58, Math.toRadians(180));
         driveToIntermediate = follower.pathBuilder()
                 .addPath(new BezierCurve(intakePoint1, intakeToInterCtrl, intermediatePoint))
@@ -219,8 +216,6 @@ public class BLUE_Auto_Template extends OpMode {
                 .build();
 
         // intermediate → shootPose
-        // Red c1_1r=(111,61,0°)   → Blue=(33,61,180°)
-        // Red c2_1r=(97,74.7,0°)  → Blue=(47,74.7,180°)
         Pose c1_1r = new Pose(33, 61,   Math.toRadians(180));
         Pose c2_1r = new Pose(47, 74.7, Math.toRadians(180));
         returnToShoot1 = follower.pathBuilder()
@@ -229,8 +224,6 @@ public class BLUE_Auto_Template extends OpMode {
                 .build();
 
         // --- CYCLE 2: shootPose → intakePoint3 (angled 145°) -----------------
-        // Red c1_2=(98.8,57.3,0°)  → Blue=(45.2,57.3,180°)
-        // Red c2_2=(120.5,63,20°)  → Blue=(23.5,63,160°)
         Pose c1_2 = new Pose(45.2, 57.3, Math.toRadians(180));
         Pose c2_2 = new Pose(23.5, 63,   Math.toRadians(160));
         driveToIntake2 = follower.pathBuilder()
@@ -239,8 +232,6 @@ public class BLUE_Auto_Template extends OpMode {
                 .build();
 
         // intakePoint3 → shootPose
-        // Red c1_2r=(116.5,64.7,20°) → Blue=(27.5,64.7,160°)
-        // Red c2_2r=(108,66,0°)       → Blue=(36,66,180°)
         Pose c1_2r = new Pose(27.5, 64.7, Math.toRadians(160));
         Pose c2_2r = new Pose(36,   66,   Math.toRadians(180));
         returnToShoot2 = follower.pathBuilder()
@@ -249,8 +240,6 @@ public class BLUE_Auto_Template extends OpMode {
                 .build();
 
         // --- CYCLE 3: shootPose → intakePoint4 (upper side) ------------------
-        // Red c1_3=(99.2,87,0°)   → Blue=(44.8,87,180°)
-        // Red c2_3=(103.5,83.3,0°)→ Blue=(40.5,83.3,180°)
         Pose c1_3 = new Pose(44.8, 87,   Math.toRadians(180));
         Pose c2_3 = new Pose(40.5, 83.3, Math.toRadians(180));
         driveToIntake3 = follower.pathBuilder()
@@ -259,8 +248,6 @@ public class BLUE_Auto_Template extends OpMode {
                 .build();
 
         // intakePoint4 → shootPose
-        // Red c1_3r=(103.5,83.3,0°)→ Blue=(40.5,83.3,180°)
-        // Red c2_3r=(99.4,84.4,0°) → Blue=(44.6,84.4,180°)
         Pose c1_3r = new Pose(40.5, 83.3, Math.toRadians(180));
         Pose c2_3r = new Pose(44.6, 84.4, Math.toRadians(180));
         returnToShoot3 = follower.pathBuilder()
@@ -269,8 +256,6 @@ public class BLUE_Auto_Template extends OpMode {
                 .build();
 
         // --- CYCLE 4: shootPose → intakePoint5 (lower side) ------------------
-        // Red c1_4=(95,46,0°)    → Blue=(49,47,180°)
-        // Red c2_4=(95.5,32.8,0°)→ Blue=(48.5,33.8,180°) [note: slight Y adj kept from 18-auto]
         Pose c1_4 = new Pose(49,   47,   Math.toRadians(180));
         Pose c2_4 = new Pose(48.5, 33.8, Math.toRadians(180));
         driveToIntake4 = follower.pathBuilder()
@@ -279,8 +264,6 @@ public class BLUE_Auto_Template extends OpMode {
                 .build();
 
         // intakePoint5 → shootPose
-        // Red c1_4r=(114,36,0°)→ Blue=(30,36,180°)
-        // Red c2_4r=(96,56,0°) → Blue=(48,56,180°)
         Pose c1_4r = new Pose(30, 36, Math.toRadians(180));
         Pose c2_4r = new Pose(48, 56, Math.toRadians(180));
         returnToShoot4 = follower.pathBuilder()
@@ -289,8 +272,6 @@ public class BLUE_Auto_Template extends OpMode {
                 .build();
 
         // Park
-        // Red cFinal1=(96,81,0°)→ Blue=(48,81,180°)
-        // Red cFinal2=(96,71,0°)→ Blue=(48,71,180°)
         Pose cFinal1 = new Pose(48, 81, Math.toRadians(180));
         Pose cFinal2 = new Pose(48, 71, Math.toRadians(180));
         driveToFinalPosition = follower.pathBuilder()
@@ -351,7 +332,6 @@ public class BLUE_Auto_Template extends OpMode {
                     telemetry.addData("Intake Dwell", msElapsed(intakeWaitTimer) + " / " + INTAKE_DWELL_NORMAL + "ms");
                     if (msElapsed(intakeWaitTimer) >= INTAKE_DWELL_NORMAL) {
                         dwelling = false;
-                        // intake keeps running while driving to intermediate
                         follower.setMaxPower(NORMAL_DRIVE_POWER);
                         follower.followPath(driveToIntermediate, true);
                         setPathState(PathState.DRIVE_TO_INTERMEDIATE);
@@ -372,7 +352,6 @@ public class BLUE_Auto_Template extends OpMode {
                     stopIntake();
                     shooterSystem.setVelocity(DYNAMIC_MODE);
                 }
-                // Actively hold position — resists any external push.
                 follower.holdPoint(intermediatePoint);
                 telemetry.addData("Intermediate Dwell", msElapsed(intakeWaitTimer) + " / " + INTERMEDIATE_DWELL + "ms");
                 if (msElapsed(intakeWaitTimer) >= INTERMEDIATE_DWELL) {
@@ -535,7 +514,7 @@ public class BLUE_Auto_Template extends OpMode {
                     if (msElapsed(intakeWaitTimer) >= INTAKE_DWELL_NORMAL) {
                         dwelling = false;
                         stopIntake();
-                        alignTurretDynamic(); // pre-aim while driving back
+                        alignTurretDynamic();
                         follower.setMaxPower(NORMAL_DRIVE_POWER);
                         follower.followPath(returnToShoot4, true);
                         setPathState(PathState.RETURN_TO_SHOOT_4);
@@ -737,6 +716,7 @@ public class BLUE_Auto_Template extends OpMode {
     @Override
     public void loop() {
         follower.update();
+        shooterSystem.update(); // FIXED: PID now runs every loop iteration
         statePathUpdate();
 
         telemetry.addData("Path State",    pathState.toString());

@@ -34,7 +34,7 @@ import org.firstinspires.ftc.teamcode.subsystems.ShooterSystem;
  *   DcMotor   → "turretRotator"
  *   IMU       → "imu"
  */
-@Autonomous(name = "18 Artifact Auto Curved")
+//@Autonomous(name = "18 Artifact Auto Curved")
 public class BLUEAuto_18_Artifact extends OpMode {
 
     // -----------------------------------------------------------------------
